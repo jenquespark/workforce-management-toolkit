@@ -1,0 +1,82 @@
+# Minimal pyproject.toml for workforce-management-harness
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "workforce-management-toolkit"
+version = "0.1.0"
+description = "Thin vendor-neutral Python library for Workforce Management tooling — forecasting, staffing, and validation through consistent interfaces."
+readme = "README.md"
+license = {text = "Apache-2.0"}
+authors = [
+    {name = "Workforce Management Toolkit Contributors"}
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Financial and Insurance Industry",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Office Management :: Scheduling"
+]
+keywords = [
+    "workforce-management",
+    "wfm",
+    "staffing",
+    "forecasting",
+    "validation",
+    "contact-center",
+    "open-source"
+]
+
+[project.urls]
+Homepage = "https://github.com/jenquespark/workforce-management-toolkit"
+Documentation = "https://github.com/jenquespark/workforce-management-toolkit#readme"
+"Bug Reports" = "https://github.com/jenquespark/workforce-management-toolkit/issues"
+"Source Code" = "https://github.com/jenquespark/workforce-management-toolkit"
+
+[project.optional-dependencies]
+forecast = [
+    "numpy>=1.21.0",
+    "pandas>=1.5.0",
+    "statsforecast>=1.0.0"
+]
+staffing = [
+    "pyworkforce>=0.1.0"
+]
+validation = [
+    "pandera>=0.13.0"
+]
+optimization = [
+    "ortools>=9.5.0"
+]
+full = [
+    "numpy>=1.21.0",
+    "pandas>=1.5.0",
+    "statsforecast>=1.0.0",
+    "pyworkforce>=0.1.0",
+    "pandera>=0.13.0",
+    "ortools>=9.5.0"
+]
+
+# Note: The `wfm-harness` console script is intentionally not registered yet.
+# The Click commands are not wired up in v0.1.0; the Python API is the interface.
+# This will be added once the CLI is functional (tracked for the engineering pass).
+
+[tool.ruff]
+target-version = "py39"
+line-length = 100
+select = ["E", "F", "I", "UP", "W"]
+ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
