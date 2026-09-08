@@ -35,7 +35,7 @@ Workforce Management Toolkit depends on third-party open-source packages. Each r
 - **Package:** `ortools`
 - **Upstream:** https://github.com/google/or-tools
 - **License:** Apache-2.0
-- **Status:** Adapter stub present; integration planned for a future release, not a validated core provider in v0.1.0
+- **Status:** Adapter class present but non-operational (scheduling/optimization not validated against the installed API); deferred to a future release, not a validated core provider in v0.1.0
 - **License text:** https://github.com/google/or-tools/blob/main/LICENSE
 
 ## Additional dependencies

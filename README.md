@@ -1,226 +1,199 @@
 # Workforce Management Toolkit
 
-A thin Python library that puts consistent interfaces around existing Workforce Management tooling — forecasting, staffing, and validation — so that these capabilities can be discovered, called, and composed without reimplementing the underlying mathematics.
+A small Python library that provides consistent, WFM-oriented interfaces over selected open-source libraries — forecasting, staffing, and data validation — so these capabilities can be discovered, called, and composed without reimplementing the underlying mathematics.
 
-## Naming note (internal namespace)
-
-The public project name is **Workforce Management Toolkit** (`workforce-management-toolkit`), but the Python import package is currently `wfm_harness` (a carry-over from the earlier internal project name "Workforce Management Harness"). This mismatch is temporary and will be reconciled in a later engineering pass. For now, use `from wfm_harness...` in code.
+The Toolkit wraps existing libraries (StatsForecast, pyworkforce, Pandera) behind a common adapter interface. It does not contain forecasting algorithms, Erlang formulas, or optimization solvers; it calls the libraries that do.
 
 ## Why this exists
 
-WFM engineering typically involves multiple specialized libraries for different problems: one for forecasting, another for Erlang C staffing, another for data validation, and so on. Each has its own API, data format, units, and error behavior. Teams end up writing custom glue code to connect them.
+Workforce Management engineering is fragmented. Forecasting, staffing/queueing, validation, optimization, scheduling, and BI/operational systems each have their own libraries, APIs, data formats, units, and error behavior. Teams repeatedly write glue code to connect them.
 
-Workforce Management Toolkit wraps those libraries behind a common adapter interface. The goal is not to replace them but to provide a stable, discoverable layer that:
+This Toolkit normalizes part of that glue. It provides a stable, discoverable layer that:
 
-- Normalizes input and output structures across providers
-- Makes capabilities machine-readable (useful for automation and language models)
-- Documents units and parameter expectations explicitly
-- Reports provider availability honestly
+- exposes a shared adapter interface (`BaseAdapter`)
+- normalizes input/output across providers
+- documents units and parameter expectations explicitly
+- reports provider availability honestly
+- makes capabilities machine-readable via the registry
 
-The Toolkit does not contain forecasting algorithms, Erlang formulas, or optimization solvers. It calls the libraries that do.
+It is not a complete WFM platform. It is a thin normalization layer over a small set of open-source calculations.
 
-## Current providers
+## Current capabilities
 
-Three provider adapters are implemented in v0.1.0. (These are code implementations; the integration tests use the installed packages where available. See [docs/capabilities.md](docs/capabilities.md) for which operations are executed by real providers versus registry-only definitions.)
+Only three operations are executable in this stage, each delegated to a real provider:
 
-| Adapter | Provider | Executed capability | License |
+| Capability | Provider | Status | Purpose |
 |---|---|---|---|
-| StatisticsForecast | [StatsForecast](https://github.com/Nixtla/statsforecast) | `forecast()` — time series (AutoARIMA, AutoETS, SeasonalNaive) | Apache-2.0 |
-| Staffing | [pyworkforce](https://github.com/rodrigo-arenas/pyworkforce) | `staff()` — Erlang C staffing; `schedule()` | MIT |
-| Validation | [Pandera](https://github.com/unionai-oss/pandera) | `validate()` — schema enforcement | MIT |
+| `forecast.generate` | StatsForecast | **Implemented** | Statistical time-series forecasting (AutoARIMA, AutoETS, SeasonalNaive) |
+| `staffing.erlang_c` | pyworkforce | **Implemented** | Erlang C required positions from explicit contact-volume inputs |
+| `validate.dataset` | Pandera | **Implemented** | Schema validation of a WFM dataset |
 
-Each adapter exposes the full `forecast()`, `staff()`, `schedule()`, `optimize()`, and `validate()` method surface, but only the operations in the **Executed capability** column perform real provider work. Operations outside a provider's domain return a structured error (e.g., calling `staff()` on the StatsForecast adapter returns an error indicating staffing requires pyworkforce). The Pandera adapter's non-`validate()` methods are validation-only: they validate the input but do not perform forecasting or staffing.
+Everything else in the registry is **registered/planned** — the metadata exists, but there is no executable provider logic yet: `forecast.evaluate`, `staffing.multiskill`, `schedule.generate`, `validate.wfm_config`, `capacity.forecast`, optimization.
 
-## What the Toolkit owns
+The capability registry distinguishes these states explicitly. `Capability.is_executable()` returns `True` only for the three implemented operations.
 
-- Common adapter interface (`BaseAdapter`)
-- Canonical data structure (`WFMData`)
-- Capability registry with machine-readable descriptions
-- Provider availability detection
-- Input/output normalization
-- Configuration with Pydantic V2 validation
+## What the Toolkit adds
 
-## What it does not own
+- a shared WFM-oriented adapter interface
+- normalized data/contracts (`WFMData`, `AdapterResult`)
+- explicit units in adapter metadata and configuration
+- provider adapters (thin wrappers, no reimplemented math)
+- capability metadata with executable/planned status
+- Pydantic v2 configuration models
+- provider availability detection (`health_check()`)
 
-- Forecast algorithms
-- Erlang C formulas
-- Schema validation internals
-- Any optimization or scheduling logic (planned, not implemented)
-- BI platforms, dashboards, or data stores
-- LLM inference or prompting
+## What it does not do
+
+- it is not a complete WFM platform
+- it is not a scheduler
+- it is not a BI platform
+- it is not a forecasting engine (it delegates to StatsForecast)
+- it is not an Erlang implementation (it delegates to pyworkforce)
+- it is not a SaaS or hosted service
+- it is not an LLM runtime
+- it is not production-ready
+
+## Providers
+
+### StatsForecast
+
+[StatsForecast](https://github.com/Nixtla/statsforecast) (Apache-2.0) provides statistical time-series forecasting. The Toolkit configures a `StatsForecast` instance with a model and horizon, and executes forecasting through its class-based API. Models supported: `AutoARIMA`, `AutoETS`, `SeasonalNaive`. Forecasts are statistical, provider-executed, and reproducible for a fixed input.
+
+### pyworkforce
+
+[pyworkforce](https://github.com/rodrigo-arenas/pyworkforce) (MIT) provides Erlang C staffing. The Toolkit calls `ErlangC.required_positions()` with explicit business inputs:
+
+- `transactions` — contact volume in the interval
+- `aht` — average handling time (minutes)
+- `asa` — required average speed of answer (minutes)
+- `interval` — interval length (minutes)
+- `service_level` — target (proportion, e.g. `0.80`)
+- `max_occupancy` — maximum occupancy (proportion)
+- `shrinkage` — shrinkage (proportion)
+
+The pyworkforce adapter never invents an arrival rate or contact demand from data. A staffing calculation requires these explicit inputs.
+
+### Pandera
+
+[Pandera](https://github.com/unionai-oss/pandera) (MIT) provides dataframe validation. The Toolkit uses it to validate WFM datasets against a canonical schema. Pandera validates; it does not forecast, staff, schedule, or optimize. Calling those methods returns an explicit unsupported result.
 
 ## Installation
 
-The package is **not yet published to PyPI**. These commands reflect the intended install names once published:
+The package is **not yet published to PyPI**. There is no `pip install workforce-management-toolkit` that works today.
+
+For development, clone the repository and install with the extras you need:
 
 ```bash
-pip install workforce-management-toolkit
+git clone https://github.com/jenquespark/workforce-management-toolkit.git
+cd workforce-management-toolkit
+pip install -e '.[forecast,staffing,validation]'
 ```
 
-Provider dependencies are optional extras:
-
-```bash
-pip install workforce-management-toolkit[forecast]   # adds statsforecast, numpy, pandas
-pip install workforce-management-toolkit[staffing]   # adds pyworkforce
-pip install workforce-management-toolkit[validation] # adds pandera
-pip install workforce-management-toolkit[full]       # all three
-```
+Extras: `forecast` (statsforecast, numpy, pandas), `staffing` (pyworkforce), `validation` (pandera), `full` (all), `optimization` (ortools — note: scheduling/optimization capabilities are **not** executable in this stage; this extra only makes the OR-Tools adapter importable).
 
 ## Quick start
 
 ```python
-from wfm_harness.adapters.statsforecast_adapter import StatsForecastAdapter
-from wfm_harness.adapters.pyworkforce_adapter import PyworkforceAdapter
-from wfm_harness.adapters.pandera_adapter import PanderaAdapter
-from wfm_harness.domain import WFMData
-from datetime import datetime
+from datetime import datetime, timedelta
+from wfm_toolkit.adapters.statsforecast_adapter import StatsForecastAdapter
+from wfm_toolkit.adapters.pyworkforce_adapter import PyworkforceAdapter
+from wfm_toolkit.adapters.pandera_adapter import PanderaAdapter
+from wfm_toolkit.domain import WFMData
 
-# Forecasting
+# Forecasting (Statistical, provider-executed)
 sf = StatsForecastAdapter()
-data = [WFMData(timestamp=datetime(2024, 1, i, 0, 0), value=100 + i*5) for i in range(30)]
-result = sf.forecast(data, forecast_horizon=7, model="AutoARIMA")
+history = [
+    WFMData(timestamp=datetime(2024, 1, 1) + timedelta(days=i), value=100.0 + i * 5)
+    for i in range(30)
+]
+forecast = sf.forecast(history, model="AutoARIMA", forecast_horizon=7, season_length=7, freq="D")
+print(forecast.success)  # True when statsforecast is installed
 
-# Staffing
+# Staffing (Erlang C, explicit business inputs)
 pw = PyworkforceAdapter()
-result = pw.staff(data, service_level=0.80, average_speed_of_answer=20)
+staffing = pw.staff(
+    None,
+    transactions=100,
+    aht=3,
+    asa=0.5,
+    interval=30,
+    service_level=0.8,
+    max_occupancy=0.85,
+    shrinkage=0.3,
+)
+# staffing.data.metrics["positions"] -> required agents
 
-# Validation
+# Validation (Pandera schema check)
 pa = PanderaAdapter()
-result = pa.validate(data)
+validation = pa.validate(history)  # value must be float
+print(validation.success)  # True when pandera is installed
 ```
 
-The `WFMCLI` class provides a higher-level interface for `doctor()`, `capabilities()`, and `validate()`:
+The `WFMCLI` class provides programmatic helpers without fabricating results:
 
 ```python
-from wfm_harness.cli import WFMCLI
+from wfm_toolkit.cli import WFMCLI
 
 cli = WFMCLI()
-print(cli.doctor())      # provider availability check
-print(cli.capabilities()) # registered capabilities
+print(cli.doctor())  # provider availability + executable capabilities
+print(cli.capabilities())  # registered capabilities with status
 ```
 
-**Note:** A `wfm-harness` console script is planned but not yet registered — the Click commands are not wired up in v0.1.0. The Python API is the interface.
+**No console script is registered.** The Click CLI is not wired up in v0.1.0; the Python API is the primary interface. A `wfm-toolkit` console script will be added once a real CLI exists and is tested.
 
 ## Capability discovery
 
-The capability registry provides machine-readable descriptions of available operations:
+The capability registry describes every operation: required inputs, outputs, provider, and **status** (`implemented`, `planned`, `experimental`, `unavailable`).
 
 ```python
-from wfm_harness.capability_registry import CapabilityRegistry
+from wfm_toolkit.capability_registry import CapabilityRegistry
 
 registry = CapabilityRegistry()
-for cap in registry.list_capabilities():
-    print(cap.identifier, cap.provider.name, cap.deterministic)
+for cap in registry.capabilities.values():
+    print(cap.identifier, cap.status.value, cap.is_executable())
 ```
 
-Each capability describes its required inputs, outputs, provider, and whether it requires an LLM. This is designed for automation and for language models that need to discover what operations are available without hardcoding that knowledge.
+A capability definition being present does **not** mean the operation is executable. Check `cap.is_executable()` — in v0.1.0 only `forecast.generate`, `staffing.erlang_c`, and `validate.dataset` return `True`.
 
-## Configuration
+## WFM units and semantics
 
-Configuration uses Pydantic V2. Key parameters with their actual units:
+The adapters use these units when calling providers (documented in adapter metadata):
 
-| Parameter | Type | Default | Units |
-|---|---|---|---|
-| `timezone` | str | "UTC" | IANA timezone |
-| `average_speed_of_answer` | float | required | seconds |
-| `average_handle_time` | float | required | seconds |
-| `target` (occupancy) | float | required | proportion (0.0–1.0) |
-| `shrinkage_rate` | float | configurable | proportion (0.0–1.0) |
+| Quantity | Unit | Notes |
+|---|---|---|
+| `transactions` | contacts per interval | explicit input, never inferred |
+| `interval` | minutes | interval length |
+| `aht` (average handle time) | minutes | pyworkforce API |
+| `asa` (average speed of answer) | minutes | pyworkforce API |
+| `service_level` | proportion 0–1 | `0.80` = 80% |
+| `shrinkage` | proportion 0–1 | |
+| `occupancy` | proportion 0–1 | |
+| `value` (dataset) | float | WFMData.value must be float for Pandera schema |
 
-**Common mistake:** Service level and shrinkage are proportions (0.0–1.0), not percentages. `0.80` means 80%, not `80`. See [docs/configuration.md](docs/configuration.md) for the full configuration reference.
+See [docs/configuration.md](docs/configuration.md) for the full configuration reference and [docs/providers.md](docs/providers.md) for provider semantics.
+
+## Optional agent usage
+
+An LLM/agent may use the registry to choose a capability and gather parameters; the Toolkit/provider executes the calculation. The LLM is optional — the Toolkit works entirely without one. This is not a "harness"; it is a library with consistent interfaces.
 
 ## Project status
 
-**v0.1.0 — Early stage, core implemented.**
-
-Implemented (adapter code with provider execution where the dependency is installed):
-
-- `StatsForecastAdapter.forecast()` — calls StatsForecast
-- `PyworkforceAdapter.staff()` and `schedule()` — call pyworkforce
-- `PanderaAdapter.validate()` — calls Pandera
-- Capability registry (static capability definitions)
-- Python API (WFMCLI class, adapter classes)
-- Configuration with validation
-- Unit and integration tests
-
-Not operational / not implemented:
-
-- Click-based CLI (`wfm-harness` console script) — entry point deliberately not registered; commands not wired
-- OR-Tools adapter (`optimize()`, `schedule()`) — adapter class present but deferred, not a validated provider
-- `forecast.evaluate`, `staffing.multiskill`, `schedule.generate`, `capacity.forecast` — registry definitions only; no executable provider logic
-- `PyworkforceAdapter.forecast()` / `optimize()` — return structured "not supported" errors
-- `PanderaAdapter.forecast()` / `staff()` / `schedule()` / `optimize()` — validation-only, not real operations
-- End-to-end pipeline composition, intraday management, BI patterns — planned
-
-The API surface may change. The architecture is stable but incomplete.
+- **Early stage** — API may change
+- Core adapter interface and three executable capabilities implemented
+- Scheduling, optimization, multi-skill staffing, capacity planning: **planned**, not executable
+- Cloud Code engineering review pending
+- **Not yet published to PyPI** — no stable release yet
 
 ## Roadmap
 
-**Near-term:**
-- Click CLI commands wired up
-- Forecast accuracy evaluation (MAPE, MAE, RMSE)
-- Multi-provider forecast comparison
+Short, grouped roadmap — see [docs/roadmap.md](docs/roadmap.md) for details.
 
-**Medium-term:**
-- OR-Tools integration finalized
-- Multi-skill staffing
-- Scheduling and optimization capabilities
-- Pipeline composition API
-
-**Longer-term:**
-- Intraday management
-- Chat/async workload modeling
-- Capacity planning
-- BI integration patterns
-- MCP/tool protocol support
-
-## Architecture
-
-```
-Consumer (Python / Agent / Script)
-        │
-        ▼
-┌──────────────────────────┐
-│  Workforce Management    │
-│  Toolkit                 │
-│                          │
-│  Capability Registry     │
-│  BaseAdapter Interface   │
-│  Configuration (Pydantic)│
-│                          │
-│  ┌──────┬──────┬──────┐  │
-│  │Stats │pywork│Pandera│  │
-│  │Fore- │force │      │  │
-│  │cast  │      │      │  │
-│  └──┬───┴──┬───┴──┬───┘  │
-└─────┼──────┼──────┼──────┘
-      │      │      │
-      ▼      ▼      ▼
-  StatsFore- pywork- Pandera
-  cast       force   (external
-  (external) (external) packages)
-```
-
-## Engineering decisions
-
-**Thin adapters, not reimplementations.** The Toolkit wraps existing libraries rather than rewriting Erlang C or ARIMA. This keeps the code small and the math correct.
-
-**Optional extras.** Each provider is independently installable. You don't need StatsForecast if you only want staffing.
-
-**No LLM requirement.** The Toolkit works entirely without language models. If a model is used, it handles intent and parameter gathering; the provider handles the calculation.
-
-**Explicit units.** WFM tools frequently fail because units are ambiguous. The configuration documents and validates units for every parameter.
-
-## Contributing
-
-Contributions make sense for:
-- Additional provider adapters
-- Tests for edge cases
-- Documentation of WFM domain concepts
-- Bug reports with reproducible examples
-
-This is a small project with a specific scope. Contributions should stay within it.
+- **CLI**: wire a real tested console script
+- **Forecasting**: forecast accuracy evaluation, multi-provider comparison
+- **Staffing**: multi-skill staffing
+- **Scheduling/optimization**: validate OR-Tools integration
+- **Pipeline**: compose forecast → staff → validate
 
 ## License
 
-Apache-2.0. See [LICENSE](./LICENSE) for the full text and [THIRD_PARTY.md](./THIRD_PARTY.md) for provider licenses.
+Apache-2.0 Toolkit source. Third-party packages retain their own licenses. See [LICENSE](./LICENSE) and [THIRD_PARTY.md](./THIRD_PARTY.md).

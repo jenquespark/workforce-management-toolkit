@@ -2,37 +2,34 @@
 
 Workforce Management Toolkit is structured in three layers: consumers, the Toolkit core, and provider libraries.
 
-> **Naming note (temporary internal namespace):** The public project name is **Workforce Management Toolkit** (`workforce-management-toolkit`), but the Python import package is currently `wfm_harness` — a carry-over from the earlier internal project name "Workforce Management Harness". The package directory, module names, and import statements all use `wfm_harness`. This mismatch is known and will be reconciled by the Cloud Code engineering pass; it is tracked here deliberately rather than fixed now to avoid a churn-heavy rename during the documentation phase.
-
 ## Layer overview
 
 ### Consumer layer
 
 The consumers that interact with the Toolkit:
 
-- **Python API** — `wfm_harness` module for programmatic access (primary interface)
-- **Agent Skills** — Machine-readable capability descriptions for language model tool-use
-- **CLI** — `wfm-harness` command-line tool (planned; Click commands not yet wired up)
+- **Python API** — the `wfm_toolkit` module for programmatic access (primary interface)
+- **Capability registry** — machine-readable capability descriptions for automation and language-model tool-use
+- **CLI** — a `wfm-toolkit` console script is planned; Click commands are not yet wired up
 
 ### Toolkit core
 
 The core provides:
 
-- **Capability Registry** — Machine-readable catalog of available operations
-- **Base Adapter** — Abstract interface that all provider adapters implement
-- **Domain Models** — Canonical data structures (`WFMData`, result types)
+- **Capability Registry** — machine-readable catalog with explicit executable/planned status
+- **Base Adapter** — abstract interface that all provider adapters implement
+- **Domain Models** — canonical data structures (`WFMData`, result types)
 - **Configuration** — Pydantic V2 validated settings with explicit units
-- **CLI Framework** — Click-based command structure
 
 ### Provider layer
 
 External provider libraries:
 
-- **StatsForecast** — Statistical forecasting models
+- **StatsForecast** — statistical forecasting models
 - **pyworkforce** — Erlang C staffing calculations
-- **Pandera** — Schema validation for DataFrames
+- **Pandera** — schema validation for DataFrames
 
-(OR-Tools is present as an adapter stub and is planned for a future release, but is not a validated core provider.)
+OR-Tools is present as an adapter class but is **not** a validated core provider in v0.1.0: its scheduling/optimization methods are not operational against the installed API (verified: `schedule()` fails with an API mismatch, `optimize()` returns INFEASIBLE on its default model). It is deferred.
 
 ## Adapter interface
 
@@ -59,18 +56,19 @@ class BaseAdapter(ABC):
     def validate(self, data, **kwargs) -> AdapterResult: ...
 ```
 
-Each adapter implements the full `forecast()`, `staff()`, `schedule()`, `optimize()`, and `validate()` method surface but only performs real provider work on its domain operations:
+Each adapter implements the full method surface but only performs real provider work on its domain operations:
 
-- **StatsForecast adapter** — `forecast()` executes; `staff()`, `schedule()`, `optimize()`, `validate()` return structured "requires another provider" errors.
-- **pyworkforce adapter** — `staff()` and `schedule()` execute; `forecast()` and `optimize()` return structured "not supported" errors; `validate()` runs a Pandera-based input check.
-- **Pandera adapter** — `validate()` executes; `forecast()`, `staff()`, `schedule()`, `optimize()` are **validation-only** (they validate the input through Pandera but do not perform the named operation).
-- **OR-Tools adapter** — `optimize()` and `schedule()` present as stubs; not a validated core provider in v0.1.0.
+- **StatsForecast adapter** — `forecast()` executes; `staff()`, `schedule()`, `optimize()`, `validate()` return explicit unsupported results.
+- **pyworkforce adapter** — `staff()` executes (Erlang C via explicit business inputs); `forecast()`, `optimize()`, and `schedule()` return explicit unsupported results (scheduling is deferred).
+- **Pandera adapter** — `validate()` executes; `forecast()`, `staff()`, `schedule()`, `optimize()` return explicit unsupported results. Pandera is a validation provider; calling `forecast()` on it does not silently validate-and-succeed.
+- **OR-Tools adapter** — class present; `optimize()`/`schedule()` are non-operational in this stage and the capabilities are registered as planned.
 
 This design means:
 
 - Capabilities are clearly separated by provider
+- Unsupported operations fail explicitly rather than silently doing something else
 - Adding a new adapter requires implementing `BaseAdapter`
-- The `execute_operation` method dispatches to the correct operation
+- `execute_operation` dispatches to the correct operation
 - Results are consistently typed as `AdapterResult`
 
 ## Domain models
@@ -81,47 +79,47 @@ All data flows through `WFMData` containers:
 @dataclass
 class WFMData:
     timestamp: datetime
-    value: Union[int, float]
+    value: float
     metadata: Dict[str, Any]
 ```
 
 Results are typed per operation:
 
-- `ForecastResult` — predictions with confidence intervals
+- `ForecastResult` — predictions with model metadata
 - `StaffingResult` — agent allocations with metrics
-- `ScheduleResult` — roster assignments
-- `OptimizationResult` — objective value and solution
+- `ScheduleResult` — roster assignments (unused until scheduling is implemented)
+- `OptimizationResult` — objective value and solution (unused until optimization is implemented)
 - `ValidationResult` — pass/fail with violations
 
 ## Data flow
 
-1. **Input:** Consumer provides `list[WFMData]` (or equivalent)
+1. **Input:** Consumer provides `list[WFMData]` (or explicit business parameters for staffing)
 2. **Adapter dispatch:** `execute_operation` routes to the correct adapter method
-3. **Provider execution:** Adapter calls the provider library (e.g., `statsforecast`, `pyworkforce.erlang_c`)
+3. **Provider execution:** Adapter calls the provider library (e.g., StatsForecast `StatsForecast(models=[...]).forecast()`, pyworkforce `ErlangC(...).required_positions()`, Pandera `DataFrameSchema.validate()`)
 4. **Result normalization:** Adapter wraps library output in typed result objects
 5. **Output:** `AdapterResult` returned with success status, data, and metadata
 
 ## File structure
 
 ```
-wfm_harness/
+wfm_toolkit/
 ├── __init__.py              # Package exports
-├── __main__.py              # Entry point
+├── __main__.py              # python -m wfm_toolkit summary
 ├── version.py               # Version string
 ├── domain.py                # Data models (WFMData, results)
 ├── config.py                # Pydantic V2 configuration
 ├── capability.py            # Capability configuration
-├── capability_registry.py   # Capability registry
-├── capacity_registry.py     # Capacity planning registry (planned)
+├── capability_registry.py   # Capability registry (status-aware)
+├── capacity_registry.py     # Capacity planning definitions (planned)
 ├── skill_registry.py        # Agent skill definitions
-├── cli.py                   # Command-line interface (WFMCLI class; Click wired in later release)
+├── cli.py                   # WFMCLI programmatic helpers (no wired console script)
 └── adapters/
-    ├── __init__.py           # Adapter exports
-    ├── base.py               # BaseAdapter interface
-    ├── statsforecast_adapter.py  # Forecasting
-    ├── pyworkforce_adapter.py    # Staffing
-    ├── pandera_adapter.py        # Validation
-    └── ortools_adapter.py        # Scheduling/optimization
+    ├── __init__.py          # Adapter exports
+    ├── base.py              # BaseAdapter interface
+    ├── statsforecast_adapter.py  # Forecasting (executable)
+    ├── pyworkforce_adapter.py    # Staffing (executable)
+    ├── pandera_adapter.py        # Validation (executable)
+    └── ortools_adapter.py        # Scheduling/optimization (deferred)
 ```
 
 ## Design rationale
@@ -132,4 +130,4 @@ wfm_harness/
 
 **Why optional extras?** Not every user needs every provider. The `forecast` extra pulls in StatsForecast; the `staffing` extra pulls in pyworkforce. This keeps the dependency footprint small.
 
-**Why a capability registry?** Machine-readable capability discovery enables language models to programmatically determine what operations are available and what parameters they require, without hardcoding that knowledge into prompts.
+**Why a capability registry with status?** Machine-readable capability discovery enables automation to determine what operations are actually executable versus merely registered, without hardcoding that knowledge.

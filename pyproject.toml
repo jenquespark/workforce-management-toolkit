@@ -9,6 +9,7 @@ name = "workforce-management-toolkit"
 version = "0.1.0"
 description = "Thin vendor-neutral Python library for Workforce Management tooling — forecasting, staffing, and validation through consistent interfaces."
 readme = "README.md"
+requires-python = ">=3.9"
 license = {text = "Apache-2.0"}
 authors = [
     {name = "Workforce Management Toolkit Contributors"}
@@ -66,13 +67,23 @@ full = [
     "ortools>=9.5.0"
 ]
 
-# Note: The `wfm-harness` console script is intentionally not registered yet.
-# The Click commands are not wired up in v0.1.0; the Python API is the interface.
-# This will be added once the CLI is functional (tracked for the engineering pass).
+# NOTE: The `optimization` extra installs OR-Tools, but scheduling/optimization
+# capabilities are DEFERRED (registry-only, not executable) in this stage.
+# Installing this extra does not make schedule/optimize operations work; it only
+# makes the OR-Tools adapter importable.
+
+# NOTE: No console script is registered. The Click CLI is not wired up in
+# v0.1.0; the Python API is the primary interface. A console script will be
+# added once a real CLI exists and is tested (tracked for the engineering pass).
+
+[tool.setuptools.packages.find]
+include = ["wfm_toolkit*"]
 
 [tool.ruff]
 target-version = "py39"
 line-length = 100
+
+[tool.ruff.lint]
 select = ["E", "F", "I", "UP", "W"]
 ignore = ["E501"]
 

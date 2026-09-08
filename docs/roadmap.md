@@ -44,7 +44,7 @@ Run multiple what-if scenarios with different parameters (shrinkage assumptions,
 
 ### BI integration patterns
 
-Documented patterns for connecting Harness output to common BI platforms (Metabase, Grafana, Power BI) and databases (PostgreSQL, SQLite).
+Documented patterns for connecting Toolkit output to common BI platforms (Metabase, Grafana, Power BI) and databases (PostgreSQL, SQLite).
 
 ## Longer-term
 

@@ -145,4 +145,4 @@ skills:
 
 **Interval:** Must be in minutes. `15` means 15-minute intervals, `60` means hourly.
 
-See `wfm_harness/config.py` for the complete, authoritative configuration model.
+See `wfm_toolkit/config.py` for the complete, authoritative configuration model.

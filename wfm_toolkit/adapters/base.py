@@ -1,94 +1,91 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any, List, Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Any
 
-from pydantic import BaseModel, Field
 
 @dataclass
 class AdapterConfig:
     """Configuration for an adapter."""
-    
+
     provider_name: str
     package_name: str
     license: str
     deterministic_level: str = "high"
-    required_dependencies: List[str] = None
-    optional_dependencies: List[str] = None
-    configuration_options: Dict[str, Any] = None
-    
-    def __post_init__(self):
-        if self.required_dependencies is None:
-            self.required_dependencies = []
-        if self.optional_dependencies is None:
-            self.optional_dependencies = []
-        if self.configuration_options is None:
-            self.configuration_options = {}
+    required_dependencies: list[str] = field(default_factory=list)
+    optional_dependencies: list[str] = field(default_factory=list)
+    configuration_options: dict[str, Any] = field(default_factory=dict)
+
 
 @dataclass
 class AdapterResult:
     """Base result type for all adapter operations."""
-    
+
     adapter_name: str
     operation: str
     success: bool
     data: Any
-    metadata: Dict[str, Any] = None
-    error_message: Optional[str] = None
-    timestamp: Optional[datetime] = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+    error_message: str | None = None
+    timestamp: datetime | None = None
+
 
 class BaseAdapter(ABC):
-    """Abstract base class for all Workforce Management Harness adapters."""
-    
+    """Abstract base class for all Workforce Management Toolkit adapters.
+
+    Every adapter exposes the full BaseAdapter surface, but only the
+    operations its provider genuinely performs are executable. All other
+    operations must return an explicit unsupported AdapterResult - an adapter
+    must never silently perform a different operation to satisfy the interface.
+    """
+
     def __init__(self, config: AdapterConfig):
         self.config = config
         self._validate_dependencies()
         self._initialize_adapter()
-    
+
     def _validate_dependencies(self):
         """Validate that required dependencies are available."""
-        # This will be implemented by each adapter
         pass
-    
+
     def _initialize_adapter(self):
         """Initialize adapter-specific resources."""
-        # This will be implemented by each adapter
         pass
-    
+
     @abstractmethod
-    def health_check(self) -> Dict[str, Any]:
+    def health_check(self) -> bool:
         """Check if the adapter is healthy and ready to use."""
         pass
-    
+
     @abstractmethod
     def forecast(self, data: Any, **kwargs) -> AdapterResult:
         """Generate forecasts."""
         pass
-    
+
     @abstractmethod
     def staff(self, data: Any, **kwargs) -> AdapterResult:
         """Calculate staffing requirements."""
         pass
-    
+
     @abstractmethod
     def schedule(self, data: Any, **kwargs) -> AdapterResult:
         """Generate schedules."""
         pass
-    
+
     @abstractmethod
     def optimize(self, data: Any, **kwargs) -> AdapterResult:
         """Optimize operations."""
         pass
-    
+
     @abstractmethod
     def validate(self, data: Any, **kwargs) -> AdapterResult:
         """Validate data or configurations."""
         pass
-    
+
     def execute_operation(self, operation: str, data: Any, **kwargs) -> AdapterResult:
-        """Execute a specific operation."""
+        """Execute a specific operation by name."""
         try:
             if operation == "forecast":
                 return self.forecast(data, **kwargs)
@@ -106,7 +103,7 @@ class BaseAdapter(ABC):
                     operation=operation,
                     success=False,
                     data=None,
-                    error_message=f"Unknown operation: {operation}"
+                    error_message=f"Unknown operation: {operation}",
                 )
         except Exception as e:
             return AdapterResult(
@@ -114,10 +111,10 @@ class BaseAdapter(ABC):
                 operation=operation,
                 success=False,
                 data=None,
-                error_message=str(e)
+                error_message=str(e),
             )
-    
-    def get_provider_info(self) -> Dict[str, Any]:
+
+    def get_provider_info(self) -> dict[str, Any]:
         """Get information about the provider."""
         return {
             "name": self.config.provider_name,
@@ -126,13 +123,13 @@ class BaseAdapter(ABC):
             "deterministic_level": self.config.deterministic_level,
             "required_dependencies": self.config.required_dependencies,
             "optional_dependencies": self.config.optional_dependencies,
-            "configuration_options": self.config.configuration_options
+            "configuration_options": self.config.configuration_options,
         }
-    
-    def get_adaptation_metadata(self) -> Dict[str, Any]:
+
+    def get_adaptation_metadata(self) -> dict[str, Any]:
         """Get adaptation-specific metadata."""
         return {
             "adapter_type": self.__class__.__name__,
             "configured": True,
-            "health_check": self.health_check()
+            "health_check": self.health_check(),
         }

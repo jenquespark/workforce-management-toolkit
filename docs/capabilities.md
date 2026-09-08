@@ -1,43 +1,44 @@
 # Capability Taxonomy
 
-Workforce Management Toolkit organizes WFM functionality as **capabilities** — discrete operations that can be discovered through consistent interfaces.
+Workforce Management Toolkit organizes WFM functionality as **capabilities** — discrete operations discoverable through consistent interfaces.
 
-The `CapabilityRegistry` defines capabilities as static metadata. **Registration is separate from implementation**: a registered capability may or may not have executable adapter logic in the current version.
+The `CapabilityRegistry` defines capabilities as metadata with an explicit **status**. **Registration is separate from implementation**: a registered capability may be `implemented`, `planned`, `experimental`, or `unavailable`. In v0.1.0 only three capabilities are executable.
 
 ## Capability definitions (as registered)
 
-| Capability | Provider | Description | License | Executable in v0.1.0 |
+| Capability | Provider | Description | License | Status |
 |---|---|---|---|---|
-| `forecast.generate` | StatsForecast | Time series forecasting (AutoARIMA, AutoETS, SeasonalNaive) | Apache-2.0 | ✅ via `StatsForecastAdapter.forecast()` |
-| `forecast.evaluate` | StatsForecast | Forecast accuracy metrics (MAPE, MAE, RMSE) | Apache-2.0 | ❌ registry-only |
-| `staffing.erlang_c` | pyworkforce | Erlang C staffing calculation for voice queues | MIT | ✅ via `PyworkforceAdapter.staff()` |
-| `staffing.multiskill` | pyworkforce | Multi-skill staffing calculation | MIT | ❌ registry-only |
-| `schedule.generate` | OR-Tools | Shift schedule generation (constraint solving) | Apache-2.0 | ❌ registry-only (adapter stub present) |
-| `validate.wfm_config` | Pandera | WFM configuration validation against a canonical schema | MIT | ✅ via `PanderaAdapter.validate()` |
-| `capacity.forecast` | StatsForecast | Long-term capacity planning from demand forecasts | Apache-2.0 | ❌ registry-only |
+| `forecast.generate` | StatsForecast | Statistical time-series forecasting (AutoARIMA, AutoETS, SeasonalNaive) | Apache-2.0 | ✅ implemented — `StatsForecastAdapter.forecast()` |
+| `forecast.evaluate` | StatsForecast | Forecast accuracy metrics (MAPE, MAE, RMSE) | Apache-2.0 | ❌ planned |
+| `staffing.erlang_c` | pyworkforce | Erlang C required positions for voice queues | MIT | ✅ implemented — `PyworkforceAdapter.staff()` |
+| `staffing.multiskill` | pyworkforce | Multi-skill staffing | MIT | ❌ planned |
+| `schedule.generate` | OR-Tools | Shift schedule generation (constraint solving) | Apache-2.0 | ❌ planned (OR-Tools adapter present but non-operational) |
+| `validate.dataset` | Pandera | Dataset schema validation | MIT | ✅ implemented — `PanderaAdapter.validate()` |
+| `validate.wfm_config` | Pandera | Configuration dict validation | MIT | ❌ planned |
+| `capacity.forecast` | StatsForecast | Long-term capacity planning | Apache-2.0 | ❌ planned |
 
-## Capability implementations vs. registry definitions
+## Executable vs. registered
 
 Distinguish two things:
 
 - **Implemented adapter operations** — adapter methods that execute real provider work when the provider package is installed.
-- **Registry-only capability definitions** — static metadata rows that describe a capability but have no executable provider logic in v0.1.0.
+- **Registry-only (planned) capability definitions** — metadata that describes a capability with no executable provider logic in v0.1.0.
 
 ### Implemented adapter operations
 
 | Adapter | Executed operations | Non-operational methods |
 |---|---|---|
-| StatsForecast | `forecast()` | `staff()`, `schedule()`, `optimize()`, `validate()` → structured "requires other provider" errors |
-| pyworkforce | `staff()`, `schedule()` | `forecast()`, `optimize()` → structured errors; `validate()` → validation-only |
-| Pandera | `validate()` | `forecast()`, `staff()`, `schedule()`, `optimize()` → **validation-only** (validate input, do not perform the named operation) |
+| StatsForecast | `forecast()` | `staff()`, `schedule()`, `optimize()`, `validate()` → explicit unsupported |
+| pyworkforce | `staff()` | `forecast()`, `optimize()` → explicit unsupported; `schedule()` → explicit unsupported (scheduling deferred) |
+| Pandera | `validate()` | `forecast()`, `staff()`, `schedule()`, `optimize()` → explicit unsupported |
 
-Note: the Pandera adapter's `forecast()`, `staff()`, `schedule()`, and `optimize()` methods exist and return successfully, but they only run input validation through Pandera — they do not actually forecast, staff, schedule, or optimize. They are validation-only, not the real operations. Similarly, `PyworkforceAdapter.forecast()` and `optimize()` are "not supported" stubs, not real forecasting/optimization.
+An unsupported operation returns an `AdapterResult` with `success=False` and an error message explaining which provider handles that domain. No adapter silently performs a different operation to satisfy the interface, and no method named `forecast()`/`staff()`/`schedule()` reports success merely because input validation passed.
 
-### Registry-only capability definitions
+### Registry-only (planned) capabilities
 
-`forecast.evaluate`, `staffing.multiskill`, `schedule.generate`, `validate.wfm_config`, and `capacity.forecast` are defined in the registry as static metadata but have **no executable adapter logic** in v0.1.0. They describe the roadmap direction, not current functionality. Do not call them expecting a result.
+`forecast.evaluate`, `staffing.multiskill`, `schedule.generate`, `validate.wfm_config`, and `capacity.forecast` are registered metadata with **no executable adapter logic** in v0.1.0. `Capability.is_executable()` returns `False` for them. Do not call them expecting a result.
 
-The `doctor()` check (`WFMCLI.doctor()`) reports which provider packages are actually installed in the current environment; it does not by itself confirm that a named operation is executable.
+The `doctor()` check (`WFMCLI.doctor()`) reports which provider packages are importable and which capabilities are executable; it reflects the current environment.
 
 ## Inputs and outputs (per actual adapter)
 
@@ -47,50 +48,49 @@ Signature: `forecast(data: List[WFMData], **kwargs)`
 
 | Parameter | Type | Description |
 |---|---|---|
-| `data` | List[WFMData] | Historical time series (timestamp + value) |
+| `data` | List[WFMData] | Historical time series (timestamp + float value) |
 | `model` | str | `AutoARIMA`, `AutoETS`, `SeasonalNaive` |
 | `forecast_horizon` | int | Steps ahead |
-| `seasonality` | int | Seasonal period |
-| `interval` | float | Confidence interval (0–1) |
+| `season_length` | int | Seasonal period |
+| `freq` | str | pandas frequency, e.g. `"D"` |
 
-Returns: `AdapterResult` with `data` = List[WFMData] forecast points, `metadata` with model used and horizon.
+Returns: `AdapterResult` with `data` = List[WFMData] forecast points and `metadata` (model used, horizon, data points).
 
 ### `staff()` — pyworkforce adapter
 
-Signature: `staff(data: List[WFMData], **kwargs)`
+Signature: `staff(data, **kwargs)`
 
-The adapter estimates arrival rates from the input data (using timestamp hour of day) and applies Erlang C with shrinkage and occupancy adjustments.
+The adapter **never invents demand**. The caller must supply explicit business inputs as keyword arguments:
 
-| Parameter | Type | Default | Description |
+| Parameter | Type | Unit | Required |
 |---|---|---|---|
-| `service_level` | float | 0.80 | Target service level (0–1) |
-| `average_speed_of_answer` | float | 180 | Target ASA (seconds) |
-| `shrinkage_rate` | float | 0.30 | Agent shrinkage (0–1) |
-| `half_occupancy` | float | 0.85 | Max occupancy (0–1) |
+| `transactions` | float | contacts per interval | yes |
+| `aht` | float | minutes | yes |
+| `asa` | float | minutes | yes |
+| `interval` | int | minutes | yes |
+| `service_level` | float | proportion [0,1] | no (default 0.80) |
+| `max_occupancy` | float | proportion (0,1] | no (default 0.85) |
+| `shrinkage` | float | proportion [0,1) | no (default 0.0) |
 
-Returns: `AdapterResult` with `data` = `StaffingResult` (allocations per period, metrics).
+Returns: `AdapterResult` with `data` = `StaffingResult` (allocations per period, metrics from `ErlangC.required_positions()`: raw_positions, positions, service_level, occupancy, waiting_probability). The calculation is delegated to pyworkforce; the Toolkit does not implement Erlang math.
 
 ### `validate()` — Pandera adapter
 
 Signature: `validate(data: List[WFMData], **kwargs)`
 
-Validates input data against a DataFrame schema (timestamp ≥ 2020-01-01, value > 0, monotonic timestamps).
+Validates a dataset against a DataFrame schema (timestamp ≥ 2020-01-01, value float > 0). Values must be floats (int values fail the `float64` dtype check).
 
-Returns: `AdapterResult` with `data` = validated WFMData list, `metadata` with validation result.
+Returns: `AdapterResult` with `data` = validated WFMData list on success, or `success=False` with a schema error message.
 
 ## Capability registry
 
 ```python
-from wfm_harness.capability_registry import CapabilityRegistry
+from wfm_toolkit.capability_registry import CapabilityRegistry
 
 registry = CapabilityRegistry()
-caps = registry.list_capabilities()
+caps = registry.capabilities.values()
 for cap in caps:
-    print(cap.identifier, cap.provider.name, cap.deterministic)
+    print(cap.identifier, cap.status.value, cap.is_executable())
 ```
 
-The registry is meant to support machine-readable discovery (useful for automation and language model tool-use).
-
-## Naming note
-
-The public project name is **Workforce Management Toolkit** (`workforce-management-toolkit`), but the Python import package is currently `wfm_harness` (a carry-over from the earlier internal name "Workforce Management Harness"). This temporary mismatch is tracked for the Cloud Code engineering pass.
+`registry.executable_capabilities()` returns only the three implemented capabilities. The registry supports machine-readable discovery for automation and language-model tool use.
