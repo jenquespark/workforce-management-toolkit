@@ -15,18 +15,18 @@ Workforce Management Toolkit depends on third-party open-source packages. Each r
 ### pyworkforce
 
 - **Package:** `pyworkforce`
-- **Upstream:** https://github.com/inside_outside/pyworkforce
+- **Upstream:** https://github.com/rodrigo-arenas/pyworkforce
 - **License:** MIT
 - **Role in Toolkit:** Erlang C staffing calculations for contact center queues
-- **License text:** https://github.com/inside_outside/pyworkforce/blob/master/LICENSE
+- **License text:** https://github.com/rodrigo-arenas/pyworkforce/blob/main/LICENSE
 
 ### Pandera
 
 - **Package:** `pandera`
-- **Upstream:** https://github.com/pandera-dev/pandera
+- **Upstream:** https://github.com/unionai-oss/pandera
 - **License:** MIT
 - **Role in Toolkit:** Schema validation for WFM datasets
-- **License text:** https://github.com/pandera-dev/pandera/blob/main/LICENSE
+- **License text:** https://github.com/unionai-oss/pandera/blob/main/LICENSE.txt
 
 ## Planned provider (not yet a validated core provider)
 

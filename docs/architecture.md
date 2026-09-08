@@ -2,6 +2,8 @@
 
 Workforce Management Toolkit is structured in three layers: consumers, the Toolkit core, and provider libraries.
 
+> **Naming note (temporary internal namespace):** The public project name is **Workforce Management Toolkit** (`workforce-management-toolkit`), but the Python import package is currently `wfm_harness` — a carry-over from the earlier internal project name "Workforce Management Harness". The package directory, module names, and import statements all use `wfm_harness`. This mismatch is known and will be reconciled by the Cloud Code engineering pass; it is tracked here deliberately rather than fixed now to avoid a churn-heavy rename during the documentation phase.
+
 ## Layer overview
 
 ### Consumer layer
@@ -57,7 +59,12 @@ class BaseAdapter(ABC):
     def validate(self, data, **kwargs) -> AdapterResult: ...
 ```
 
-Each adapter implements only the operations relevant to its provider. For example, the Pandera adapter implements `validate` for data validation and returns "Not supported" for `forecast`, `staff`, `schedule`, and `optimize`. The StatsForecast adapter implements `forecast` and returns "Not supported" for other operations.
+Each adapter implements the full `forecast()`, `staff()`, `schedule()`, `optimize()`, and `validate()` method surface but only performs real provider work on its domain operations:
+
+- **StatsForecast adapter** — `forecast()` executes; `staff()`, `schedule()`, `optimize()`, `validate()` return structured "requires another provider" errors.
+- **pyworkforce adapter** — `staff()` and `schedule()` execute; `forecast()` and `optimize()` return structured "not supported" errors; `validate()` runs a Pandera-based input check.
+- **Pandera adapter** — `validate()` executes; `forecast()`, `staff()`, `schedule()`, `optimize()` are **validation-only** (they validate the input through Pandera but do not perform the named operation).
+- **OR-Tools adapter** — `optimize()` and `schedule()` present as stubs; not a validated core provider in v0.1.0.
 
 This design means:
 

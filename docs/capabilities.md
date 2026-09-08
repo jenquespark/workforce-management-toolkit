@@ -2,30 +2,42 @@
 
 Workforce Management Toolkit organizes WFM functionality as **capabilities** — discrete operations that can be discovered through consistent interfaces.
 
-The `CapabilityRegistry` defines the following capabilities statically. Each has an identifier, provider, license, deterministic flag, and input/output schema.
+The `CapabilityRegistry` defines capabilities as static metadata. **Registration is separate from implementation**: a registered capability may or may not have executable adapter logic in the current version.
 
-## Capability definitions (from the registry)
+## Capability definitions (as registered)
 
-| Capability | Provider | Description | License |
-|---|---|---|---|
-| `forecast.generate` | StatsForecast | Generate deterministic forecasts (AutoARIMA, AutoETS, SeasonalNaive) | Apache-2.0 |
-| `forecast.evaluate` | StatsForecast | Forecast accuracy metrics (MAPE, MAE, RMSE) | Apache-2.0 |
-| `staffing.erlang_c` | pyworkforce | Erlang C staffing calculation for voice queues | MIT |
-| `staffing.multiskill` | pyworkforce | Multi-skill staffing calculation | MIT |
-| `schedule.generate` | OR-Tools | Shift schedule generation (constraint solving) | Apache-2.0 |
-| `validate.wfm_config` | Pandera | WFM configuration validation against a canonical schema | MIT |
-| `capacity.forecast` | StatsForecast | Long-term capacity planning from demand forecasts | Apache-2.0 |
+| Capability | Provider | Description | License | Executable in v0.1.0 |
+|---|---|---|---|---|
+| `forecast.generate` | StatsForecast | Time series forecasting (AutoARIMA, AutoETS, SeasonalNaive) | Apache-2.0 | ✅ via `StatsForecastAdapter.forecast()` |
+| `forecast.evaluate` | StatsForecast | Forecast accuracy metrics (MAPE, MAE, RMSE) | Apache-2.0 | ❌ registry-only |
+| `staffing.erlang_c` | pyworkforce | Erlang C staffing calculation for voice queues | MIT | ✅ via `PyworkforceAdapter.staff()` |
+| `staffing.multiskill` | pyworkforce | Multi-skill staffing calculation | MIT | ❌ registry-only |
+| `schedule.generate` | OR-Tools | Shift schedule generation (constraint solving) | Apache-2.0 | ❌ registry-only (adapter stub present) |
+| `validate.wfm_config` | Pandera | WFM configuration validation against a canonical schema | MIT | ✅ via `PanderaAdapter.validate()` |
+| `capacity.forecast` | StatsForecast | Long-term capacity planning from demand forecasts | Apache-2.0 | ❌ registry-only |
 
-## What is actually implemented and tested
+## Capability implementations vs. registry definitions
 
-The adapter implementations exist for:
+Distinguish two things:
 
-- **StatsForecast adapter** — `forecast()` implemented; `staff()`, `schedule()`, `optimize()`, `validate()` return structured errors (they require other providers)
-- **pyworkforce adapter** — `staff()` and `schedule()` implemented; `forecast()`, `optimize()`, `validate()` return structured errors
-- **Pandera adapter** — `validate()` implemented; `forecast()`, `staff()`, `schedule()`, `optimize()` return structured errors
-- **OR-Tools adapter** — `optimize()` and `schedule()` present; this provider is not yet a validated core capability
+- **Implemented adapter operations** — adapter methods that execute real provider work when the provider package is installed.
+- **Registry-only capability definitions** — static metadata rows that describe a capability but have no executable provider logic in v0.1.0.
 
-The registry's capability definitions are static metadata. Whether a capability actually executes depends on the provider package being installed and the corresponding adapter being invoked. The `doctor()` check reports which provider packages are installed in the environment.
+### Implemented adapter operations
+
+| Adapter | Executed operations | Non-operational methods |
+|---|---|---|
+| StatsForecast | `forecast()` | `staff()`, `schedule()`, `optimize()`, `validate()` → structured "requires other provider" errors |
+| pyworkforce | `staff()`, `schedule()` | `forecast()`, `optimize()` → structured errors; `validate()` → validation-only |
+| Pandera | `validate()` | `forecast()`, `staff()`, `schedule()`, `optimize()` → **validation-only** (validate input, do not perform the named operation) |
+
+Note: the Pandera adapter's `forecast()`, `staff()`, `schedule()`, and `optimize()` methods exist and return successfully, but they only run input validation through Pandera — they do not actually forecast, staff, schedule, or optimize. They are validation-only, not the real operations. Similarly, `PyworkforceAdapter.forecast()` and `optimize()` are "not supported" stubs, not real forecasting/optimization.
+
+### Registry-only capability definitions
+
+`forecast.evaluate`, `staffing.multiskill`, `schedule.generate`, `validate.wfm_config`, and `capacity.forecast` are defined in the registry as static metadata but have **no executable adapter logic** in v0.1.0. They describe the roadmap direction, not current functionality. Do not call them expecting a result.
+
+The `doctor()` check (`WFMCLI.doctor()`) reports which provider packages are actually installed in the current environment; it does not by itself confirm that a named operation is executable.
 
 ## Inputs and outputs (per actual adapter)
 
@@ -66,10 +78,6 @@ Validates input data against a DataFrame schema (timestamp ≥ 2020-01-01, value
 
 Returns: `AdapterResult` with `data` = validated WFMData list, `metadata` with validation result.
 
-## Non-operational capabilities
-
-`forecast.evaluate`, `staffing.multiskill`, `schedule.generate`, `validate.wfm_config`, `capacity.forecast` are defined in the registry as metadata but have no executable adapter logic in v0.1.0. They represent the roadmap direction, not current functionality.
-
 ## Capability registry
 
 ```python
@@ -82,3 +90,7 @@ for cap in caps:
 ```
 
 The registry is meant to support machine-readable discovery (useful for automation and language model tool-use).
+
+## Naming note
+
+The public project name is **Workforce Management Toolkit** (`workforce-management-toolkit`), but the Python import package is currently `wfm_harness` (a carry-over from the earlier internal name "Workforce Management Harness"). This temporary mismatch is tracked for the Cloud Code engineering pass.

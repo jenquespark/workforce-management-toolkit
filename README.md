@@ -2,6 +2,10 @@
 
 A thin Python library that puts consistent interfaces around existing Workforce Management tooling — forecasting, staffing, and validation — so that these capabilities can be discovered, called, and composed without reimplementing the underlying mathematics.
 
+## Naming note (internal namespace)
+
+The public project name is **Workforce Management Toolkit** (`workforce-management-toolkit`), but the Python import package is currently `wfm_harness` (a carry-over from the earlier internal project name "Workforce Management Harness"). This mismatch is temporary and will be reconciled in a later engineering pass. For now, use `from wfm_harness...` in code.
+
 ## Why this exists
 
 WFM engineering typically involves multiple specialized libraries for different problems: one for forecasting, another for Erlang C staffing, another for data validation, and so on. Each has its own API, data format, units, and error behavior. Teams end up writing custom glue code to connect them.
@@ -17,15 +21,15 @@ The Toolkit does not contain forecasting algorithms, Erlang formulas, or optimiz
 
 ## Current providers
 
-Three providers are implemented and tested in v0.1.0:
+Three provider adapters are implemented in v0.1.0. (These are code implementations; the integration tests use the installed packages where available. See [docs/capabilities.md](docs/capabilities.md) for which operations are executed by real providers versus registry-only definitions.)
 
-| Capability | Provider | What it does | License |
+| Adapter | Provider | Executed capability | License |
 |---|---|---|---|
-| Forecasting | [StatsForecast](https://github.com/Nixtla/statsforecast) | Time series forecasting (AutoARIMA, AutoETS, SeasonalNaive) | Apache-2.0 |
-| Staffing | [pyworkforce](https://github.com/inside_outside/pyworkforce) | Erlang C staffing calculations for voice queues | MIT |
-| Validation | [Pandera](https://github.com/pandera-dev/pandera) | Schema validation for WFM datasets | MIT |
+| StatisticsForecast | [StatsForecast](https://github.com/Nixtla/statsforecast) | `forecast()` — time series (AutoARIMA, AutoETS, SeasonalNaive) | Apache-2.0 |
+| Staffing | [pyworkforce](https://github.com/rodrigo-arenas/pyworkforce) | `staff()` — Erlang C staffing; `schedule()` | MIT |
+| Validation | [Pandera](https://github.com/unionai-oss/pandera) | `validate()` — schema enforcement | MIT |
 
-Each adapter implements `forecast()`, `staff()`, `schedule()`, `optimize()`, and `validate()` methods. Operations outside the provider's domain return a structured error (e.g., calling `staff()` on the StatsForecast adapter returns an error indicating staffing requires pyworkforce).
+Each adapter exposes the full `forecast()`, `staff()`, `schedule()`, `optimize()`, and `validate()` method surface, but only the operations in the **Executed capability** column perform real provider work. Operations outside a provider's domain return a structured error (e.g., calling `staff()` on the StatsForecast adapter returns an error indicating staffing requires pyworkforce). The Pandera adapter's non-`validate()` methods are validation-only: they validate the input but do not perform forecasting or staffing.
 
 ## What the Toolkit owns
 
@@ -47,17 +51,19 @@ Each adapter implements `forecast()`, `staff()`, `schedule()`, `optimize()`, and
 
 ## Installation
 
+The package is **not yet published to PyPI**. These commands reflect the intended install names once published:
+
 ```bash
-pip install workforce-management-harness
+pip install workforce-management-toolkit
 ```
 
 Provider dependencies are optional extras:
 
 ```bash
-pip install workforce-management-harness[forecast]   # adds statsforecast, numpy, pandas
-pip install workforce-management-harness[staffing]   # adds pyworkforce
-pip install workforce-management-harness[validation] # adds pandera
-pip install workforce-management-harness[full]       # all three
+pip install workforce-management-toolkit[forecast]   # adds statsforecast, numpy, pandas
+pip install workforce-management-toolkit[staffing]   # adds pyworkforce
+pip install workforce-management-toolkit[validation] # adds pandera
+pip install workforce-management-toolkit[full]       # all three
 ```
 
 ## Quick start
@@ -125,26 +131,26 @@ Configuration uses Pydantic V2. Key parameters with their actual units:
 
 ## Project status
 
-**v0.1.0 — Early stage, functional core.**
+**v0.1.0 — Early stage, core implemented.**
 
-Working:
-- Forecasting via StatsForecast (AutoARIMA, AutoETS, SeasonalNaive)
-- Staffing via pyworkforce (Erlang C)
-- Validation via Pandera (schema enforcement)
-- Capability registry
+Implemented (adapter code with provider execution where the dependency is installed):
+
+- `StatsForecastAdapter.forecast()` — calls StatsForecast
+- `PyworkforceAdapter.staff()` and `schedule()` — call pyworkforce
+- `PanderaAdapter.validate()` — calls Pandera
+- Capability registry (static capability definitions)
 - Python API (WFMCLI class, adapter classes)
 - Configuration with validation
 - Unit and integration tests
 
-Not yet working:
-- Click-based CLI (entry point exists, commands not wired)
-- OR-Tools integration (adapter exists but is deferred)
-- Scheduling and optimization (planned)
-- Capacity planning (planned)
-- End-to-end pipeline composition
-- Multi-skill staffing
-- Intraday management
-- BI integration patterns
+Not operational / not implemented:
+
+- Click-based CLI (`wfm-harness` console script) — entry point deliberately not registered; commands not wired
+- OR-Tools adapter (`optimize()`, `schedule()`) — adapter class present but deferred, not a validated provider
+- `forecast.evaluate`, `staffing.multiskill`, `schedule.generate`, `capacity.forecast` — registry definitions only; no executable provider logic
+- `PyworkforceAdapter.forecast()` / `optimize()` — return structured "not supported" errors
+- `PanderaAdapter.forecast()` / `staff()` / `schedule()` / `optimize()` — validation-only, not real operations
+- End-to-end pipeline composition, intraday management, BI patterns — planned
 
 The API surface may change. The architecture is stable but incomplete.
 
