@@ -170,7 +170,7 @@ The adapters use these units when calling providers (documented in adapter metad
 | `occupancy` | proportion 0–1 | |
 | `value` (dataset) | float | WFMData.value must be float for Pandera schema |
 
-See [docs/configuration.md](docs/configuration.md) for the full configuration reference and [docs/providers.md](docs/providers.md) for provider semantics.
+See [docs/configuration.md](docs/configuration.md) for the full configuration reference. Provider semantics are described in the [Providers](#providers) section above.
 
 ## Optional agent usage
 
@@ -181,7 +181,7 @@ An LLM/agent may use the registry to choose a capability and gather parameters; 
 - **Early stage** — API may change
 - Core adapter interface and three executable capabilities implemented
 - Scheduling, optimization, multi-skill staffing, capacity planning: **planned**, not executable
-- Cloud Code engineering review pending
+- Further engineering and release hardening are planned
 - **Not yet published to PyPI** — no stable release yet
 
 ## Roadmap
