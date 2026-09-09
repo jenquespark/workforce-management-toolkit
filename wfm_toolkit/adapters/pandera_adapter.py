@@ -14,8 +14,14 @@ from __future__ import annotations
 from typing import Any
 
 import pandas as pd
-from pandera.errors import SchemaError
-from pandera.pandas import Check, Column, DataFrameSchema
+
+try:
+    from pandera.errors import SchemaError
+    from pandera.pandas import Check, Column, DataFrameSchema
+
+    has_pandera = True
+except ImportError:  # pragma: no cover - depends on optional install
+    has_pandera = False
 
 from ..domain import WFMData
 from .base import AdapterConfig, AdapterResult, BaseAdapter
@@ -78,15 +84,8 @@ class PanderaAdapter(BaseAdapter):
 
     def _validate_dependencies(self):
         """Validate that Pandera is available."""
-        try:
-            import pandera
-
-            if not getattr(pandera, "__version__", None):
-                raise ImportError("Pandera version not detected")
-        except ImportError as exc:
-            raise ImportError(
-                "Pandera is not installed. Install with: pip install pandera"
-            ) from exc
+        if not has_pandera:
+            raise ImportError("Pandera is not installed. Install with: pip install pandera")
 
     def _initialize_validation(self):
         """Initialize the input/output Pandera schemas for WFMData validation."""

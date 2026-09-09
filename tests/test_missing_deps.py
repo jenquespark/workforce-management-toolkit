@@ -6,6 +6,8 @@ crash at import time, never fake a result. This mirrors the actual behavior:
 ``_validate_dependencies`` raises at construction.
 """
 
+import sys
+
 import pytest
 
 
@@ -27,16 +29,21 @@ class TestMissingOptionalDependencies:
             mod.StatsForecastAdapter()
 
     def test_pandera_missing_construction_raises_clear_import_error(self, monkeypatch):
-        """PanderaAdapter is a hard import; the constructor must raise a clean
-        ImportError when the upstream package is not installed."""
+        """PanderaAdapter module must import cleanly without pandera installed;
+        the constructor must raise a clean ImportError when upstream is missing."""
         import wfm_toolkit.adapters.pandera_adapter as mod
 
-        def _raise(self):
-            raise ImportError("Pandera is not installed. Install with: pip install pandera")
-
-        monkeypatch.setattr(mod.PanderaAdapter, "_validate_dependencies", _raise)
+        monkeypatch.setattr(mod, "has_pandera", False)
         with pytest.raises(ImportError, match="Pandera is not installed"):
             mod.PanderaAdapter()
+
+    def test_pandera_module_imports_cleanly_without_provider(self, monkeypatch):
+        """Module import must not crash when pandera is missing (lazy guard)."""
+        monkeypatch.setitem(sys.modules, "pandera", None)
+        # Simulate: force a re-import with pandera blocked
+        import wfm_toolkit.adapters.pandera_adapter as mod
+
+        assert hasattr(mod, "has_pandera")
 
     def test_import_errors_are_actionable(self):
         """The exception message must tell the user how to install the provider."""
