@@ -54,7 +54,8 @@ jobs:
         run: python -m build
       - name: Verify wheel installs
         run: |
-          pip install dist/*.whl[full]
+          WHL=$(ls dist/*.whl)
+          pip install "${WHL}[full]"
           python -c "from wfm_toolkit import __version__; print('v' + __version__)"
       - uses: actions/upload-artifact@v4
         with:
@@ -75,7 +76,9 @@ jobs:
         with:
           python-version: "3.12"
       - name: Bare install (no extras)
-        run: pip install dist/*.whl
+        run: |
+          WHL=$(ls dist/*.whl)
+          pip install "${WHL}"
       - name: Verify imports work
         run: |
           python -c "import wfm_toolkit; print('OK version', wfm_toolkit.__version__)"
