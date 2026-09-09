@@ -104,7 +104,7 @@ class WFMCLI:
             adapter = PanderaAdapter()
             result = adapter.validate(data)
             return self._output_json(
-                {"valid": result.success, "result": result},
+                {"valid": result.success},
                 result.success,
                 [result.error_message] if result.error_message else [],
                 {"command": "validate", "provider": "pandera"},

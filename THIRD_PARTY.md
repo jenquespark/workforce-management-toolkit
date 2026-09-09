@@ -32,8 +32,8 @@ Workforce Management Toolkit depends on third-party open-source packages. Each r
 
 | Package | License | Role |
 |---|---|---|
-| numpy | BSD-3-Clause | Numerical computing (transitive) |
-| pandas | BSD-3-Clause | Data manipulation (transitive) |
+| numpy | BSD-3-Clause | Numerical computing (core) |
+| pandas | BSD-3-Clause | Data manipulation (core) |
 | pydantic | MIT | Configuration validation (direct) |
 | click | BSD-3-Clause | CLI framework (direct) |
 | PyYAML | MIT | YAML configuration loading (direct) |
