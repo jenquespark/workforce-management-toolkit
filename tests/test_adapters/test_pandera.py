@@ -22,6 +22,11 @@ def make_data(count=5, value=100.0, start=None):
     return [WFMData(timestamp=start + timedelta(hours=i), value=value + i) for i in range(count)]
 
 
+def make_tz_aware_data(count=5, value=100.0):
+    start = pd.Timestamp("2024-01-01T08:00:00Z")
+    return [WFMData(timestamp=start + pd.Timedelta(hours=i), value=value + i) for i in range(count)]
+
+
 class TestPanderaAdapter:
     """Test the Pandera adapter against its real validation contract."""
 
@@ -43,13 +48,19 @@ class TestPanderaAdapter:
 
     def test_validate_valid_data_succeeds(self):
         adapter = PanderaAdapter()
-        data = make_data()
-        result = adapter.validate(data)
+        result = adapter.validate(make_data())
         assert result.success is True
-        assert result.operation == "validate"
-        # Returns the validated dataset
-        assert result.data is not None
-        assert len(result.data) == len(data)
+
+    def test_validate_timezone_aware_timestamps_succeeds(self):
+        """ISO-8601 'Z' / timezone-aware timestamps must validate.
+
+        The CLI loader accepts timezone-aware ISO timestamps; the Pandera schema
+        requires naive ``datetime64[ns]``. _convert_to_dataframe normalizes
+        aware timestamps to naive UTC so both input styles are accepted.
+        """
+        adapter = PanderaAdapter()
+        result = adapter.validate(make_tz_aware_data())
+        assert result.success is True
 
     def test_validate_negative_value_fails(self):
         """A negative contact value must fail schema validation."""

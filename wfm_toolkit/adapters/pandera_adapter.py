@@ -11,6 +11,7 @@ pretending to perform the named operation.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 
 import pandas as pd
@@ -36,10 +37,25 @@ _MAX_VALUE = 1e6
 
 
 def _convert_to_dataframe(data: list[WFMData]) -> pd.DataFrame:
-    """Convert a list of WFMData to a pandas DataFrame for validation."""
+    """Convert a list of WFMData to a pandas DataFrame for validation.
+
+    Timestamps are normalized to timezone-naive UTC so the Pandera schema's
+    ``datetime64[ns]`` requirement accepts both naive and timezone-aware
+    (ISO-8601 ``Z``/offset) inputs uniformly.
+    """
+    timestamps = []
+    for d in data:
+        ts = d.timestamp
+        if isinstance(ts, pd.Timestamp) and ts.tzinfo is not None:
+            ts = ts.tz_convert("UTC").tz_localize(None)
+        elif isinstance(ts, datetime) and ts.tzinfo is not None:
+            ts = ts.astimezone(UTC).replace(tzinfo=None)
+        elif getattr(ts, "tz", None) is not None:  # numpy datetime64[tz] fallback
+            ts = ts.tz_convert("UTC").tz_localize(None)
+        timestamps.append(ts)
     return pd.DataFrame(
         {
-            "timestamp": [d.timestamp for d in data],
+            "timestamp": timestamps,
             "value": [d.value for d in data],
         }
     )
