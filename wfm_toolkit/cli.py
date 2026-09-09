@@ -1,22 +1,29 @@
 """
 Command-line interface for Workforce Management Toolkit.
 
-NOTE: There is no wired Click console script in this stage. The Python API is
-the primary interface. This module provides a small WFMCLI class with only the
-operations that genuinely work (health check, capability listing, and
-configuration loading). It does not fabricate forecasting, staffing, or
-scheduling results, and no `wfm-toolkit` subcommands are registered until a
-real CLI is implemented and tested.
+Provides a small, honest ``wfm-toolkit`` CLI:
+
+  wfm-toolkit doctor        - report installed provider packages + executable capabilities
+  wfm-toolkit capabilities  - list registered capability metadata (JSON)
+  wfm-toolkit validate      - validate a WFM dataset file (CSV/JSON) against the canonical schema
+
+Only operations that genuinely run against the real adapters/registry are
+exposed. There is intentionally no ``forecast``/``staff`` command: those are
+Python-API operations with explicit business-input contracts, not stubbed CLI
+workflows. No fake workflows or fabricated results.
 """
 
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
+
+import click
 
 from .capability_registry import CapabilityRegistry
 from .domain import WFMData
+from .version import __version__
 
 
 class WFMCLI:
@@ -46,7 +53,7 @@ class WFMCLI:
 
         response = {
             "success": success,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "data": data,
             "errors": errors,
             "metadata": metadata,
@@ -70,7 +77,7 @@ class WFMCLI:
                 deps[pkg] = "missing"
 
         health_info = {
-            "version": "0.1.0",
+            "version": __version__,
             "provider_packages": deps,
             "executable_capabilities": executable,
             "registered_capabilities": registered,
@@ -104,3 +111,72 @@ class WFMCLI:
             )
         except Exception as e:  # pragma: no cover - depends on installed provider
             return self._output_json(None, False, errors=[str(e)], metadata={"command": "validate"})
+
+
+@click.group()
+@click.version_option(__version__, prog_name="wfm-toolkit")
+def main() -> None:
+    """Workforce Management Toolkit CLI.
+
+    A small, honest interface over the Toolkit's executable capabilities.
+    """
+
+
+@main.command()
+def doctor() -> None:
+    """Report installed provider packages and executable capabilities."""
+    click.echo(WFMCLI().doctor())
+
+
+@main.command("capabilities")
+@click.option("--format", "fmt", default="json", show_default=True, type=click.Choice(["json"]))
+@click.option("--examples/--no-examples", default=False, show_default=True)
+def capabilities_cmd(fmt: str, examples: bool) -> None:
+    """List registered capabilities with executable/planned status."""
+    click.echo(WFMCLI().capabilities(format=fmt, examples=examples))
+
+
+def _load_dataset(path: str) -> list[WFMData]:
+    """Load a dataset from a CSV (timestamp,value) or JSON file of WFMData dicts."""
+    if path.endswith(".json"):
+        with open(path, encoding="utf-8") as f:
+            payload = json.load(f)
+        raw_items = payload if isinstance(payload, list) else payload.get("data", [])
+        return [WFMData.from_dict(item) for item in raw_items]
+    # CSV: expect header timestamp,value
+    import csv
+
+    records = []
+    with open(path, newline="", encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            records.append(
+                WFMData(
+                    timestamp=datetime.fromisoformat(row["timestamp"].replace("Z", "+00:00")),
+                    value=float(row["value"]),
+                    metadata={},
+                )
+            )
+    return records
+
+
+@main.command()
+@click.argument("path", type=click.Path(exists=True, dir_okay=False))
+def validate(path: str) -> None:
+    """Validate a WFM dataset file (CSV or JSON) against the canonical schema."""
+    try:
+        data = _load_dataset(path)
+    except Exception as e:
+        click.echo(
+            json.dumps({"success": False, "errors": [f"Failed to load dataset: {e}"]}, indent=2)
+        )
+        raise SystemExit(2)
+
+    out = WFMCLI().validate_config(data)
+    click.echo(out)
+    parsed = json.loads(out)
+    if not parsed["success"]:
+        raise SystemExit(1)
+
+
+if __name__ == "__main__":
+    main()

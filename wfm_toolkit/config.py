@@ -9,15 +9,15 @@ optimization, and validation.
 from __future__ import annotations
 
 import json
-from datetime import datetime
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Any
 
 import yaml
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 
-class OperatingProfile(str, Enum):
+class OperatingProfile(StrEnum):
     """Operating profile for workforce management."""
 
     INBOUND = "inbound"
@@ -26,7 +26,7 @@ class OperatingProfile(str, Enum):
     MULTI_SKILL = "multi_skill"
 
 
-class Direction(str, Enum):
+class Direction(StrEnum):
     """Call direction."""
 
     INBOUND = "inbound"
@@ -34,7 +34,7 @@ class Direction(str, Enum):
     BLENDED = "blended"
 
 
-class TimeInterval(str, Enum):
+class TimeInterval(StrEnum):
     """Time interval for WFM calculations."""
 
     MINUTE = "minute"
@@ -44,7 +44,7 @@ class TimeInterval(str, Enum):
     MONTH = "month"
 
 
-class ForecastModel(str, Enum):
+class ForecastModel(StrEnum):
     """Forecasting model types."""
 
     SEASONAL_NAIVE = "seasonal_naive"
@@ -56,16 +56,16 @@ class ForecastModel(str, Enum):
     ETS_ANDAR_COSSO = "ets_andar_cc"
 
 
-class StaffingAlgorithm(str, Enum):
+class StaffingAlgorithm(StrEnum):
     """Staffing calculation algorithms."""
 
     ERLANG_C = "erlang_c"
     ERLANG_C_CUMULATIVE = "erlang_c_cumulative"
-    eRLANG_X = "erlang_x"
+    ERLANG_X = "erlang_x"
     ADJUSTED_ERLANG_C = "adjusted_erlang_c"
 
 
-class SchedulingSolver(str, Enum):
+class SchedulingSolver(StrEnum):
     """Scheduling optimization solvers."""
 
     PYWORKFORCE = "pyworkforce"
@@ -76,7 +76,7 @@ class SchedulingSolver(str, Enum):
     SCIP = "scip"
 
 
-class OptimizationMethod(str, Enum):
+class OptimizationMethod(StrEnum):
     """Optimization methods."""
 
     GREEDY = "greedy"
@@ -88,7 +88,7 @@ class OptimizationMethod(str, Enum):
     COUPLED_ALGORITHM = "coupled_algorithm"
 
 
-class ValidationRuleType(str, Enum):
+class ValidationRuleType(StrEnum):
     """Types of validation rules."""
 
     RANGE = "range"
@@ -99,7 +99,7 @@ class ValidationRuleType(str, Enum):
     CONSISTENCY = "consistency"
 
 
-class SkillType(str, Enum):
+class SkillType(StrEnum):
     """Skill types for workforce management."""
 
     VOICE = "voice"
@@ -112,7 +112,7 @@ class SkillType(str, Enum):
     BACK_OFFICE = "back_office"
 
 
-class ChannelType(str, Enum):
+class ChannelType(StrEnum):
     """Channel types."""
 
     VOICE = "voice"
@@ -127,10 +127,14 @@ class WFMBaseConfig(BaseModel):
     """Base configuration for all WFM operations."""
 
     name: str | None = Field(
-        default=None, description="Configuration name", example="production_config"
+        default=None,
+        description="Configuration name",
+        json_schema_extra={"example": "production_config"},
     )
     version: str = Field(default="1.0.0", description="Configuration version")
-    created_at: datetime = Field(default_factory=datetime.utcnow, description="Creation timestamp")
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC), description="Creation timestamp"
+    )
     updated_at: datetime | None = Field(None, description="Last update timestamp")
     description: str | None = Field(None, description="Configuration description")
     tags: list[str] = Field(default_factory=list, description="Tags for categorization")
@@ -159,9 +163,11 @@ class WFMBaseConfig(BaseModel):
 class IntervalConfig(WFMBaseConfig):
     """Configuration for time intervals in WFM calculations."""
 
-    interval_size: int = Field(..., gt=0, description="Size of time interval", example=60)
+    interval_size: int = Field(
+        ..., gt=0, description="Size of time interval", json_schema_extra={"example": 60}
+    )
     interval_unit: TimeInterval = Field(
-        ..., description="Unit of time interval", example=TimeInterval.MINUTE
+        ..., description="Unit of time interval", json_schema_extra={"example": TimeInterval.MINUTE}
     )
     business_start_hour: int = Field(
         default=9, ge=0, le=23, description="Business start hour (0-23)"
@@ -204,9 +210,14 @@ class IntervalConfig(WFMBaseConfig):
 class SLAConfig(WFMBaseConfig):
     """Service Level Agreement configuration."""
 
-    target: float = Field(..., gt=0, le=1, description="Target service level", example=0.80)
+    target: float = Field(
+        ..., gt=0, le=1, description="Target service level", json_schema_extra={"example": 0.80}
+    )
     average_speed_of_answer: float = Field(
-        ..., gt=0, description="Average speed of answer in seconds", example=180
+        ...,
+        gt=0,
+        description="Average speed of answer in seconds",
+        json_schema_extra={"example": 180},
     )
     acceptable_service_level: float = Field(
         default=0.90, gt=0, le=1, description="Acceptable service level"
@@ -250,7 +261,9 @@ class SLAConfig(WFMBaseConfig):
 class ShrinkageConfig(WFMBaseConfig):
     """Shrinkage configuration for workforce management."""
 
-    rate: float = Field(..., ge=0, le=1, description="Shrinkage rate", example=0.30)
+    rate: float = Field(
+        ..., ge=0, le=1, description="Shrinkage rate", json_schema_extra={"example": 0.30}
+    )
     factors: dict[str, float] = Field(
         default_factory=dict, description="Shrinkage factors by category"
     )
@@ -301,7 +314,9 @@ class ShrinkageConfig(WFMBaseConfig):
 class OccupancyConfig(WFMBaseConfig):
     """Occupancy configuration for workforce management."""
 
-    target: float = Field(..., gt=0, le=1, description="Target occupancy rate", example=0.85)
+    target: float = Field(
+        ..., gt=0, le=1, description="Target occupancy rate", json_schema_extra={"example": 0.85}
+    )
     maximum: float = Field(default=0.95, gt=0, le=1, description="Maximum occupancy rate")
     minimum: float = Field(default=0.60, gt=0, le=1, description="Minimum occupancy rate")
     calculation_method: str = Field(
@@ -1006,7 +1021,7 @@ def get_multi_skill_example_config() -> WFMConfig:
             confidence_interval=0.95,
         ),
         staffing_config=StaffingConfig(
-            algorithm=StaffingAlgorithm.eRLANG_X,
+            algorithm=StaffingAlgorithm.ERLANG_X,
             service_level_config=None,
             interval_config=None,
             shrinkage_config=None,

@@ -12,23 +12,22 @@ SeasonalNaive.
 
 from __future__ import annotations
 
-import warnings
 from typing import Any
 
 import pandas as pd
-
-warnings.filterwarnings("ignore")
 
 try:
     from statsforecast import StatsForecast
     from statsforecast.models import AutoARIMA, AutoETS, SeasonalNaive
 
     has_statsforecast = True
-except ImportError:
+except ImportError:  # pragma: no cover - depends on optional install
     has_statsforecast = False
 
-from ..domain import WFMData  # noqa: E402  (after optional-dep guard)
-from .base import AdapterConfig, AdapterResult, BaseAdapter  # noqa: E402
+from ..domain import WFMData
+from .base import AdapterConfig, AdapterResult, BaseAdapter
+
+_SUPPORTED_MODELS = ("AutoARIMA", "AutoETS", "SeasonalNaive")
 
 
 class StatsForecastAdapter(BaseAdapter):
@@ -96,9 +95,9 @@ class StatsForecastAdapter(BaseAdapter):
           season_length   : int  - seasonal period, e.g. 7 for weekly seasonality (default 7)
           freq            : str  - pandas frequency of the data (default "D")
 
-        The `value` of each WFMData is treated as the target series. Returns an
-        AdapterResult whose `data` is a list of WFMData forecast points with the
-        point forecast in `value`.
+        The ``value`` of each WFMData is treated as the target series. Returns an
+        AdapterResult whose ``data`` is a list of WFMData forecast points with the
+        point forecast in ``value``.
         """
         try:
             if not has_statsforecast:
@@ -119,19 +118,54 @@ class StatsForecastAdapter(BaseAdapter):
                     error_message="No historical data provided for forecasting",
                 )
 
+            if len(data) < 2:
+                return AdapterResult(
+                    adapter_name=self.config.provider_name,
+                    operation="forecast",
+                    success=False,
+                    data=None,
+                    error_message="At least two historical data points are required for forecasting",
+                )
+
             model_name = kwargs.get(
                 "model", self.config.configuration_options.get("model", "AutoARIMA")
             )
+            if model_name not in _SUPPORTED_MODELS:
+                return AdapterResult(
+                    adapter_name=self.config.provider_name,
+                    operation="forecast",
+                    success=False,
+                    data=None,
+                    error_message=(
+                        f"Unsupported model: {model_name!r}. Supported models: {', '.join(_SUPPORTED_MODELS)}"
+                    ),
+                )
             horizon = int(
                 kwargs.get(
                     "forecast_horizon", self.config.configuration_options.get("forecast_horizon", 7)
                 )
             )
+            if horizon < 1:
+                return AdapterResult(
+                    adapter_name=self.config.provider_name,
+                    operation="forecast",
+                    success=False,
+                    data=None,
+                    error_message="forecast_horizon must be >= 1",
+                )
             season_length = int(
                 kwargs.get(
                     "season_length", self.config.configuration_options.get("season_length", 7)
                 )
             )
+            if season_length < 1:
+                return AdapterResult(
+                    adapter_name=self.config.provider_name,
+                    operation="forecast",
+                    success=False,
+                    data=None,
+                    error_message="season_length must be >= 1",
+                )
             freq = kwargs.get("freq", self.config.configuration_options.get("freq", "D"))
 
             df = pd.DataFrame(
@@ -143,11 +177,8 @@ class StatsForecastAdapter(BaseAdapter):
             )
 
             # Build the model using the current StatsForecast 2.x class API.
-            constructor = self._model_constructors.get(model_name, AutoARIMA)
-            if model_name == "SeasonalNaive":
-                models = [constructor(season_length=season_length)]
-            else:
-                models = [constructor(season_length=season_length)]
+            constructor = self._model_constructors[model_name]
+            models = [constructor(season_length=season_length)]
 
             sf = StatsForecast(models=models, freq=freq, n_jobs=1)
             forecast_df = sf.forecast(df=df, h=horizon)
@@ -187,10 +218,10 @@ class StatsForecastAdapter(BaseAdapter):
                 operation="forecast",
                 success=False,
                 data=None,
-                error_message=str(e),
+                error_message=f"forecast() failed: {e}",
             )
 
-    def staff(self, data: list[Any], **kwargs) -> AdapterResult:
+    def staff(self, data: Any, **kwargs) -> AdapterResult:
         """Unsupported - staffing is delegated to the pyworkforce adapter."""
         return AdapterResult(
             adapter_name=self.config.provider_name,
@@ -200,7 +231,7 @@ class StatsForecastAdapter(BaseAdapter):
             error_message="Staffing is not provided by StatsForecast; use the pyworkforce adapter.",
         )
 
-    def schedule(self, data: list[Any], **kwargs) -> AdapterResult:
+    def schedule(self, data: Any, **kwargs) -> AdapterResult:
         """Unsupported - Scheduling is deferred."""
         return AdapterResult(
             adapter_name=self.config.provider_name,
@@ -210,7 +241,7 @@ class StatsForecastAdapter(BaseAdapter):
             error_message="Scheduling is not implemented in this stage.",
         )
 
-    def optimize(self, data: list[Any], **kwargs) -> AdapterResult:
+    def optimize(self, data: Any, **kwargs) -> AdapterResult:
         """Unsupported - optimization is deferred."""
         return AdapterResult(
             adapter_name=self.config.provider_name,
@@ -220,7 +251,7 @@ class StatsForecastAdapter(BaseAdapter):
             error_message="Optimization is not implemented in this stage.",
         )
 
-    def validate(self, data: list[Any], **kwargs) -> AdapterResult:
+    def validate(self, data: Any, **kwargs) -> AdapterResult:
         """Unsupported - data validation is delegated to the Pandera adapter."""
         return AdapterResult(
             adapter_name=self.config.provider_name,

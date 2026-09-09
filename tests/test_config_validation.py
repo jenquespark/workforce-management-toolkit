@@ -1045,7 +1045,7 @@ class TestWFMConfig:
         """Test that inbound config requires forecast config."""
         with pytest.raises(
             ValueError,
-            match="forecast_config is required for operating profile: OperatingProfile.INBOUND",
+            match=r"forecast_config is required for operating profile: inbound",
         ):
             WFMConfig(
                 name="test_config",
@@ -1193,7 +1193,7 @@ class TestExampleConfigs:
         assert config.occupancy_config.target == 0.88
         assert config.forecast_config.model_type == ForecastModel.AUTO_ARIMA
         assert config.forecast_config.forecast_horizon == 168
-        assert config.staffing_config.algorithm == StaffingAlgorithm.eRLANG_X
+        assert config.staffing_config.algorithm == StaffingAlgorithm.ERLANG_X
         assert config.scheduling_config.solver == SchedulingSolver.ORTOOLS
         assert config.optimization_config.method == OptimizationMethod.GENETIC_ALGORITHM
         # staffing_config mirrors the top-level skills/channels list

@@ -12,7 +12,7 @@ The `CapabilityRegistry` defines capabilities as metadata with an explicit **sta
 | `forecast.evaluate` | StatsForecast | Forecast accuracy metrics (MAPE, MAE, RMSE) | Apache-2.0 | ❌ planned |
 | `staffing.erlang_c` | pyworkforce | Erlang C required positions for voice queues | MIT | ✅ implemented — `PyworkforceAdapter.staff()` |
 | `staffing.multiskill` | pyworkforce | Multi-skill staffing | MIT | ❌ planned |
-| `schedule.generate` | OR-Tools | Shift schedule generation (constraint solving) | Apache-2.0 | ❌ planned (OR-Tools adapter present but non-operational) |
+| `schedule.generate` | OR-Tools | Shift schedule generation (constraint solving) | Apache-2.0 | ❌ planned (no runtime adapter in v0.1.0) |
 | `validate.dataset` | Pandera | Dataset schema validation | MIT | ✅ implemented — `PanderaAdapter.validate()` |
 | `validate.wfm_config` | Pandera | Configuration dict validation | MIT | ❌ planned |
 | `capacity.forecast` | StatsForecast | Long-term capacity planning | Apache-2.0 | ❌ planned |
@@ -67,7 +67,7 @@ The adapter **never invents demand**. The caller must supply explicit business i
 | `transactions` | float | contacts per interval | yes |
 | `aht` | float | minutes | yes |
 | `asa` | float | minutes | yes |
-| `interval` | int | minutes | yes |
+| `interval_min` | int | minutes | yes |
 | `service_level` | float | proportion [0,1] | no (default 0.80) |
 | `max_occupancy` | float | proportion (0,1] | no (default 0.85) |
 | `shrinkage` | float | proportion [0,1) | no (default 0.0) |
