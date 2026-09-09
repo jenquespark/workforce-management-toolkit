@@ -10,14 +10,14 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from datetime import datetime
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Any
 
 import yaml
 
 
-class CapabilityStatus(str, Enum):
+class CapabilityStatus(StrEnum):
     """Execution status of a registered capability."""
 
     IMPLEMENTED = "implemented"  # backed by real, executable adapter code
@@ -26,19 +26,19 @@ class CapabilityStatus(str, Enum):
     UNAVAILABLE = "unavailable"  # provider/operation not available in this stage
 
 
-class DeterministicLevel(str, Enum):
+class DeterministicLevel(StrEnum):
     HIGH = "high"
     MEDIUM = "medium"
     LOW = "low"
 
 
-class LLMRequirement(str, Enum):
+class LLMRequirement(StrEnum):
     NOT_REQUIRED = "not_required"
     OPTIONAL = "optional"
     REQUIRED = "required"
 
 
-class NeuralNetworkRequirement(str, Enum):
+class NeuralNetworkRequirement(StrEnum):
     NOT_REQUIRED = "not_required"
     OPTIONAL = "optional"
     REQUIRED = "required"
@@ -50,7 +50,7 @@ class CapabilityMetadata:
 
     version: str = "1.0.0"
     author: str = "Workforce Management Toolkit"
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     documentation_url: str | None = None
     examples_url: str | None = None
 

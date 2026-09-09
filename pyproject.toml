@@ -1,4 +1,4 @@
-# Minimal pyproject.toml for workforce-management-harness
+# pyproject.toml for workforce-management-toolkit
 
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
@@ -9,7 +9,7 @@ name = "workforce-management-toolkit"
 version = "0.1.0"
 description = "Thin vendor-neutral Python library for Workforce Management tooling — forecasting, staffing, and validation through consistent interfaces."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.12"
 license = {text = "Apache-2.0"}
 authors = [
     {name = "Workforce Management Toolkit Contributors"}
@@ -21,10 +21,8 @@ classifiers = [
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Office Management :: Scheduling"
 ]
 keywords = [
@@ -36,6 +34,13 @@ keywords = [
     "contact-center",
     "open-source"
 ]
+dependencies = [
+    "numpy>=1.26.0",
+    "pandas>=2.0.0",
+    "pydantic>=2.0.0",
+    "PyYAML>=6.0",
+    "click>=8.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/jenquespark/workforce-management-toolkit"
@@ -45,42 +50,28 @@ Documentation = "https://github.com/jenquespark/workforce-management-toolkit#rea
 
 [project.optional-dependencies]
 forecast = [
-    "numpy>=1.21.0",
-    "pandas>=1.5.0",
-    "statsforecast>=1.0.0"
+    "statsforecast>=2.0.0"
 ]
 staffing = [
-    "pyworkforce>=0.1.0"
+    "pyworkforce>=0.5.2"
 ]
 validation = [
-    "pandera>=0.13.0"
-]
-optimization = [
-    "ortools>=9.5.0"
+    "pandera>=0.33.0"
 ]
 full = [
-    "numpy>=1.21.0",
-    "pandas>=1.5.0",
-    "statsforecast>=1.0.0",
-    "pyworkforce>=0.1.0",
-    "pandera>=0.13.0",
-    "ortools>=9.5.0"
+    "statsforecast>=2.0.0",
+    "pyworkforce>=0.5.2",
+    "pandera>=0.33.0"
 ]
 
-# NOTE: The `optimization` extra installs OR-Tools, but scheduling/optimization
-# capabilities are DEFERRED (registry-only, not executable) in this stage.
-# Installing this extra does not make schedule/optimize operations work; it only
-# makes the OR-Tools adapter importable.
-
-# NOTE: No console script is registered. The Click CLI is not wired up in
-# v0.1.0; the Python API is the primary interface. A console script will be
-# added once a real CLI exists and is tested (tracked for the engineering pass).
+[project.scripts]
+wfm-toolkit = "wfm_toolkit.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["wfm_toolkit*"]
 
 [tool.ruff]
-target-version = "py39"
+target-version = "py312"
 line-length = 100
 
 [tool.ruff.lint]
@@ -91,3 +82,7 @@ ignore = ["E501"]
 quote-style = "double"
 indent-style = "space"
 line-ending = "lf"
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+testpaths = ["tests"]

@@ -1,14 +1,19 @@
 """Tests for PyworkforceAdapter - verified against the installed pyworkforce
 upstream API (v0.5.x). The adapter must NEVER invent an arrival rate from data;
-staffing requires explicit business inputs (transactions, aht, asa, interval).
+staffing requires explicit business inputs (transactions, aht, asa, interval_min).
+
+Parity: the Toolkit result must match a direct upstream ``ErlangC`` call.
 """
 
 import pytest
 
 pytest.importorskip("pyworkforce", reason="pyworkforce is not installed")
 
+from pyworkforce import ErlangC
+
 from wfm_toolkit.adapters.base import AdapterConfig
 from wfm_toolkit.adapters.pyworkforce_adapter import PyworkforceAdapter
+from wfm_toolkit.domain import StaffingRequest
 
 
 @pytest.fixture
@@ -66,7 +71,7 @@ class TestPyworkforceAdapter:
         adapter = PyworkforceAdapter()
         result = adapter.staff([], transactions=100, aht=180, asa=20)
         assert result.success is False
-        assert "interval" in result.error_message
+        assert "interval_min" in result.error_message
 
     def test_staff_success_with_explicit_inputs(self):
         adapter = PyworkforceAdapter()
@@ -75,7 +80,7 @@ class TestPyworkforceAdapter:
             transactions=100,
             aht=180,
             asa=20,
-            interval=60,
+            interval_min=60,
             service_level=0.8,
             max_occupancy=0.85,
             shrinkage=0.3,
@@ -133,3 +138,47 @@ class TestPyworkforceAdapter:
         result = adapter.execute_operation("unknown", [])
         assert result.success is False
         assert "Unknown operation" in result.error_message
+
+    # --- StaffingRequest typed request + parity with direct upstream ---
+
+    def test_staff_with_typed_request_parity(self):
+        """Toolkit result must equal a direct upstream ErlangC call."""
+        adapter = PyworkforceAdapter()
+        request = StaffingRequest(
+            transactions=100,
+            aht=3.0,
+            asa=0.5,
+            interval_min=30,
+            service_level=0.8,
+            max_occupancy=0.85,
+            shrinkage=0.3,
+        )
+        result = adapter.staff(request=request)
+        assert result.success is True
+        # Direct upstream call
+        erlang = ErlangC(transactions=100, aht=3.0, asa=0.5, interval=30, shrinkage=0.3)
+        direct = erlang.required_positions(service_level=0.8, max_occupancy=0.85)
+        assert result.data.positions == direct["positions"]
+        assert result.data.raw_positions == direct["raw_positions"]
+        assert result.data.service_level == direct["service_level"]
+        assert result.data.occupancy == direct["occupancy"]
+        assert result.data.waiting_probability == direct["waiting_probability"]
+
+    def test_staff_kwargs_parity(self):
+        """kwargs form must produce the same result as the typed request."""
+        adapter = PyworkforceAdapter()
+        result = adapter.staff(
+            transactions=200,
+            aht=2.5,
+            asa=20 / 60,
+            interval_min=30,
+            service_level=0.85,
+            max_occupancy=0.8,
+            shrinkage=0.25,
+        )
+        assert result.success is True
+        erlang = ErlangC(transactions=200, aht=2.5, asa=20 / 60, interval=30, shrinkage=0.25)
+        direct = erlang.required_positions(service_level=0.85, max_occupancy=0.8)
+        assert result.data.positions == direct["positions"]
+        # Metrics view is consistent
+        assert result.data.metrics["positions"] == float(direct["positions"])

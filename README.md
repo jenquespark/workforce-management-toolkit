@@ -89,7 +89,7 @@ cd workforce-management-toolkit
 pip install -e '.[forecast,staffing,validation]'
 ```
 
-Extras: `forecast` (statsforecast, numpy, pandas), `staffing` (pyworkforce), `validation` (pandera), `full` (all), `optimization` (ortools — note: scheduling/optimization capabilities are **not** executable in this stage; this extra only makes the OR-Tools adapter importable).
+Extras: `forecast` (statsforecast, numpy, pandas), `staffing` (pyworkforce), `validation` (pandera), `full` (all). Scheduling/optimization providers are not part of v0.1.0; see [docs/roadmap.md](docs/roadmap.md).
 
 ## Quick start
 
@@ -116,7 +116,7 @@ staffing = pw.staff(
     transactions=100,
     aht=3,
     asa=0.5,
-    interval=30,
+    interval_min=30,
     service_level=0.8,
     max_occupancy=0.85,
     shrinkage=0.3,
@@ -129,7 +129,14 @@ validation = pa.validate(history)  # value must be float
 print(validation.success)  # True when pandera is installed
 ```
 
-The `WFMCLI` class provides programmatic helpers without fabricating results:
+The `WFMCLI` class provides programmatic helpers without fabricating results, and the `wfm-toolkit` console script exposes the same commands:
+
+```bash
+wfm-toolkit --help
+wfm-toolkit doctor          # provider availability + executable capabilities
+wfm-toolkit capabilities    # registered capabilities with status
+wfm-toolkit validate data.csv   # validate a dataset against the canonical schema
+```
 
 ```python
 from wfm_toolkit.cli import WFMCLI
@@ -138,8 +145,6 @@ cli = WFMCLI()
 print(cli.doctor())  # provider availability + executable capabilities
 print(cli.capabilities())  # registered capabilities with status
 ```
-
-**No console script is registered.** The Click CLI is not wired up in v0.1.0; the Python API is the primary interface. A `wfm-toolkit` console script will be added once a real CLI exists and is tested.
 
 ## Capability discovery
 
@@ -188,10 +193,9 @@ An LLM/agent may use the registry to choose a capability and gather parameters; 
 
 Short, grouped roadmap — see [docs/roadmap.md](docs/roadmap.md) for details.
 
-- **CLI**: wire a real tested console script
 - **Forecasting**: forecast accuracy evaluation, multi-provider comparison
 - **Staffing**: multi-skill staffing
-- **Scheduling/optimization**: validate OR-Tools integration
+- **Scheduling/optimization**: evaluate OR-Tools (no runtime adapter in v0.1.0)
 - **Pipeline**: compose forecast → staff → validate
 
 ## License

@@ -9,8 +9,8 @@ Workforce Management Toolkit is structured in three layers: consumers, the Toolk
 The consumers that interact with the Toolkit:
 
 - **Python API** — the `wfm_toolkit` module for programmatic access (primary interface)
+- **CLI** — the `wfm-toolkit` console script (`doctor`, `capabilities`, `validate`)
 - **Capability registry** — machine-readable capability descriptions for automation and language-model tool-use
-- **CLI** — a `wfm-toolkit` console script is planned; Click commands are not yet wired up
 
 ### Toolkit core
 
@@ -18,7 +18,7 @@ The core provides:
 
 - **Capability Registry** — machine-readable catalog with explicit executable/planned status
 - **Base Adapter** — abstract interface that all provider adapters implement
-- **Domain Models** — canonical data structures (`WFMData`, result types)
+- **Domain Models** — canonical data structures (`WFMData`, `StaffingRequest`, `StaffingResult`)
 - **Configuration** — Pydantic V2 validated settings with explicit units
 
 ### Provider layer
@@ -29,7 +29,9 @@ External provider libraries:
 - **pyworkforce** — Erlang C staffing calculations
 - **Pandera** — schema validation for DataFrames
 
-OR-Tools is present as an adapter class but is **not** a validated core provider in v0.1.0: its scheduling/optimization methods are not operational against the installed API (verified: `schedule()` fails with an API mismatch, `optimize()` returns INFEASIBLE on its default model). It is deferred.
+OR-Tools scheduling/optimization is **deferred**: there is no runtime adapter in
+v0.1.0 and no `optimization` install extra. The intent is tracked in the
+roadmap; no dead adapter ships in the package.
 
 ## Adapter interface
 
@@ -59,9 +61,8 @@ class BaseAdapter(ABC):
 Each adapter implements the full method surface but only performs real provider work on its domain operations:
 
 - **StatsForecast adapter** — `forecast()` executes; `staff()`, `schedule()`, `optimize()`, `validate()` return explicit unsupported results.
-- **pyworkforce adapter** — `staff()` executes (Erlang C via explicit business inputs); `forecast()`, `optimize()`, and `schedule()` return explicit unsupported results (scheduling is deferred).
+- **pyworkforce adapter** — `staff()` executes (Erlang C via explicit business inputs, a `StaffingRequest` or kwargs); `forecast()`, `optimize()`, and `schedule()` return explicit unsupported results (scheduling is deferred).
 - **Pandera adapter** — `validate()` executes; `forecast()`, `staff()`, `schedule()`, `optimize()` return explicit unsupported results. Pandera is a validation provider; calling `forecast()` on it does not silently validate-and-succeed.
-- **OR-Tools adapter** — class present; `optimize()`/`schedule()` are non-operational in this stage and the capabilities are registered as planned.
 
 This design means:
 
@@ -73,23 +74,37 @@ This design means:
 
 ## Domain models
 
-All data flows through `WFMData` containers:
+All time-series data flows through `WFMData` containers:
 
 ```python
-@dataclass
+@dataclass(frozen=True)
 class WFMData:
     timestamp: datetime
-    value: float
-    metadata: Dict[str, Any]
+    value: int | float
+    metadata: dict[str, Any]
+```
+
+Staffing inputs use the typed `StaffingRequest` (explicit units, no invented demand):
+
+```python
+@dataclass(frozen=True)
+class StaffingRequest:
+    transactions: float  # total transactions in the interval
+    aht: float  # minutes
+    asa: float  # minutes
+    interval_min: int  # interval length in minutes
+    service_level: float = 0.80  # [0, 1]
+    max_occupancy: float = 0.85  # (0, 1]
+    shrinkage: float = 0.0  # [0, 1)
 ```
 
 Results are typed per operation:
 
-- `ForecastResult` — predictions with model metadata
-- `StaffingResult` — agent allocations with metrics
-- `ScheduleResult` — roster assignments (unused until scheduling is implemented)
-- `OptimizationResult` — objective value and solution (unused until optimization is implemented)
-- `ValidationResult` — pass/fail with violations
+- `StaffingResult` — positions and Erlang C metrics from pyworkforce
+- `AdapterResult` — uniform envelope for all adapter operations (success, data, metadata, error)
+
+Forecast and validation results are returned inside the `AdapterResult` envelope
+(`data` is `list[WFMData]` for forecast and validation).
 
 ## Data flow
 
@@ -104,22 +119,18 @@ Results are typed per operation:
 ```
 wfm_toolkit/
 ├── __init__.py              # Package exports
-├── __main__.py              # python -m wfm_toolkit summary
+├── __main__.py              # python -m wfm_toolkit -> CLI
 ├── version.py               # Version string
-├── domain.py                # Data models (WFMData, results)
+├── domain.py                # Data models (WFMData, StaffingRequest, StaffingResult)
 ├── config.py                # Pydantic V2 configuration
-├── capability.py            # Capability configuration
 ├── capability_registry.py   # Capability registry (status-aware)
-├── capacity_registry.py     # Capacity planning definitions (planned)
-├── skill_registry.py        # Agent skill definitions
-├── cli.py                   # WFMCLI programmatic helpers (no wired console script)
+├── cli.py                   # wfm-toolkit CLI (doctor, capabilities, validate)
 └── adapters/
     ├── __init__.py          # Adapter exports
     ├── base.py              # BaseAdapter interface
     ├── statsforecast_adapter.py  # Forecasting (executable)
     ├── pyworkforce_adapter.py    # Staffing (executable)
-    ├── pandera_adapter.py        # Validation (executable)
-    └── ortools_adapter.py        # Scheduling/optimization (deferred)
+    └── pandera_adapter.py        # Validation (executable)
 ```
 
 ## Design rationale

@@ -28,24 +28,19 @@ Workforce Management Toolkit depends on third-party open-source packages. Each r
 - **Role in Toolkit:** Schema validation for WFM datasets
 - **License text:** https://github.com/unionai-oss/pandera/blob/main/LICENSE.txt
 
-## Planned provider (not yet a validated core provider)
-
-### OR-Tools
-
-- **Package:** `ortools`
-- **Upstream:** https://github.com/google/or-tools
-- **License:** Apache-2.0
-- **Status:** Adapter class present but non-operational (scheduling/optimization not validated against the installed API); deferred to a future release, not a validated core provider in v0.1.0
-- **License text:** https://github.com/google/or-tools/blob/main/LICENSE
-
 ## Additional dependencies
 
 | Package | License | Role |
 |---|---|---|
 | numpy | BSD-3-Clause | Numerical computing (transitive) |
 | pandas | BSD-3-Clause | Data manipulation (transitive) |
-| pydantic | MIT | Configuration validation |
-| click | BSD-3-Clause | CLI framework |
+| pydantic | MIT | Configuration validation (direct) |
+| click | BSD-3-Clause | CLI framework (direct) |
+| PyYAML | MIT | YAML configuration loading (direct) |
+
+## Planned providers (not part of v0.1.0)
+
+- **OR-Tools** (`ortools`, Apache-2.0) — scheduling/optimization is deferred; no runtime adapter and no `optimization` extra in v0.1.0. Tracked in [docs/roadmap.md](docs/roadmap.md).
 
 ## Compatibility
 

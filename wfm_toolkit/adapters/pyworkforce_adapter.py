@@ -7,33 +7,31 @@ The pyworkforce ErlangC API takes explicit business inputs - it never invents
 contact demand. All staffing parameters (transactions, average handling time,
 target answer speed, interval duration, shrinkage, occupancy) must be supplied
 by the caller; the adapter only converts and delegates to pyworkforce.
+
+Units (matching the current upstream pyworkforce API):
+
+  transactions : total number of transactions arriving in the interval (float)
+  aht          : average handling time of a transaction, in MINUTES (float)
+  asa          : required average speed of answer, in MINUTES (float)
+  interval     : interval length, in MINUTES (int)
+  shrinkage    : fraction of time an operator is not available, in [0, 1) (float)
+  service_level: target service level, in [0, 1] (float)
+  max_occupancy: max fraction of time a transaction occupies a position, (0, 1] (float)
 """
 
 from __future__ import annotations
 
-import warnings
 from typing import Any
-
-warnings.filterwarnings("ignore")
 
 try:
     from pyworkforce import ErlangC
 
     has_pyworkforce = True
-except ImportError:
+except ImportError:  # pragma: no cover - depends on optional install
     has_pyworkforce = False
 
-from ..domain import StaffingResult  # noqa: E402  (after optional-dep guard)
-from .base import AdapterConfig, AdapterResult, BaseAdapter  # noqa: E402
-
-# pyworkforce parameter units (per the current upstream API).
-#   transactions : total number of transactions arriving in the interval (float)
-#   aht          : average handling time of a transaction, in MINUTES (float)
-#   asa          : required average speed of answer, in MINUTES (float)
-#   interval     : interval length, in MINUTES (int)
-#   shrinkage    : fraction of time an operator is not available, in [0, 1) (float)
-#   service_level: target service level, in [0, 1] (float)        [via required_positions]
-#   max_occupancy: max fraction of time a transaction occupies a position, (0, 1] [via required_positions]
+from ..domain import StaffingRequest, StaffingResult
+from .base import AdapterConfig, AdapterResult, BaseAdapter
 
 
 class PyworkforceAdapter(BaseAdapter):
@@ -77,7 +75,7 @@ class PyworkforceAdapter(BaseAdapter):
         except Exception:
             return False
 
-    def forecast(self, data: list[Any], **kwargs) -> AdapterResult:
+    def forecast(self, data: Any, **kwargs) -> AdapterResult:
         """Not supported - forecasting is delegated to the StatsForecast adapter."""
         return AdapterResult(
             adapter_name=self.config.provider_name,
@@ -87,25 +85,27 @@ class PyworkforceAdapter(BaseAdapter):
             error_message="Forecasting is not provided by pyworkforce; use the StatsForecast adapter.",
         )
 
-    def staff(self, data: list[Any], **kwargs) -> AdapterResult:
+    def staff(
+        self, data: Any = None, *, request: StaffingRequest | None = None, **kwargs
+    ) -> AdapterResult:
         """
         Compute required positions using pyworkforce Erlang C.
 
-        Unlike the earlier generated version, this adapter never invents an
-        arrival rate from timestamp metadata. The caller must supply explicit
-        business inputs in the kwargs (or via adapter configuration):
+        This adapter never invents contact demand. The caller must supply an
+        explicit :class:`StaffingRequest` (recommended) or the equivalent
+        keyword arguments:
 
-          transactions : int/float  - total transactions arriving in the interval (REQUIRED)
-          aht          : float      - average handling time in MINUTES (REQUIRED)
-          asa          : float      - required average speed of answer in MINUTES (REQUIRED)
-          interval     : int        - interval length in MINUTES (REQUIRED)
-          shrinkage    : float      - in [0, 1), default from config (0.0)
-          service_level: float      - in [0, 1], default 0.80
-          max_occupancy: float      - in (0, 1], default 0.85
+          transactions : float - total transactions arriving in the interval (REQUIRED)
+          aht          : float - average handling time in MINUTES (REQUIRED)
+          asa          : float - required average speed of answer in MINUTES (REQUIRED)
+          interval_min : int   - interval length in MINUTES (REQUIRED)
+          service_level: float - target service level in [0, 1], default 0.80
+          max_occupancy: float - max occupancy fraction in (0, 1], default 0.85
+          shrinkage    : float - shrinkage fraction in [0, 1), default 0.0
 
-        The `data` argument is accepted for interface compatibility but is not
-        used to fabricate demand. Returns an explicit error if any required
-        business input is missing.
+        The ``data`` argument is accepted for BaseAdapter interface
+        compatibility but is never used to fabricate demand. Returns an
+        explicit error AdapterResult if any required business input is missing.
         """
         try:
             if not has_pyworkforce:
@@ -117,71 +117,68 @@ class PyworkforceAdapter(BaseAdapter):
                     error_message="pyworkforce is not installed",
                 )
 
-            # Required explicit business inputs (no invention).
-            transactions = kwargs.get("transactions")
-            aht = kwargs.get("aht")
-            asa = kwargs.get("asa")
-            interval = kwargs.get("interval")
-
-            missing = [
-                name
-                for name, val in (
-                    ("transactions", transactions),
-                    ("aht", aht),
-                    ("asa", asa),
-                    ("interval", interval),
-                )
-                if val is None
-            ]
-            if missing:
-                return AdapterResult(
-                    adapter_name=self.config.provider_name,
-                    operation="staff",
-                    success=False,
-                    data=None,
-                    error_message=(
-                        "staff() requires explicit business inputs: "
-                        + ", ".join(missing)
-                        + ". The adapter does not infer demand from data."
+            if request is None:
+                # Build from explicit kwargs (all required).
+                missing = [
+                    name
+                    for name in ("transactions", "aht", "asa", "interval_min")
+                    if kwargs.get(name) is None
+                ]
+                if missing:
+                    return AdapterResult(
+                        adapter_name=self.config.provider_name,
+                        operation="staff",
+                        success=False,
+                        data=None,
+                        error_message=(
+                            "staff() requires explicit business inputs: "
+                            + ", ".join(missing)
+                            + ". The adapter does not infer demand from data; pass a StaffingRequest."
+                        ),
+                    )
+                request = StaffingRequest(
+                    transactions=float(kwargs["transactions"]),
+                    aht=float(kwargs["aht"]),
+                    asa=float(kwargs["asa"]),
+                    interval_min=int(kwargs["interval_min"]),
+                    service_level=float(
+                        kwargs.get(
+                            "service_level",
+                            self.config.configuration_options.get("service_level", 0.80),
+                        )
+                    ),
+                    max_occupancy=float(
+                        kwargs.get(
+                            "max_occupancy",
+                            self.config.configuration_options.get("max_occupancy", 0.85),
+                        )
+                    ),
+                    shrinkage=float(
+                        kwargs.get(
+                            "shrinkage", self.config.configuration_options.get("shrinkage", 0.0)
+                        )
                     ),
                 )
 
-            # Convert seconds->minutes for aht/asa if the caller supplied seconds,
-            # matching the upstream API which expects minutes. Callers may also
-            # pass minutes directly; we treat the value as the unit the caller
-            # documents. Here we require minutes to match pyworkforce exactly.
-            shrinkage = kwargs.get(
-                "shrinkage", self.config.configuration_options.get("shrinkage", 0.0)
-            )
-            service_level = kwargs.get(
-                "service_level", self.config.configuration_options.get("service_level", 0.80)
-            )
-            max_occupancy = kwargs.get(
-                "max_occupancy", self.config.configuration_options.get("max_occupancy", 0.85)
-            )
-
             erlang = ErlangC(
-                transactions=float(transactions),
-                aht=float(aht),
-                asa=float(asa),
-                interval=int(interval),
-                shrinkage=float(shrinkage),
+                transactions=request.transactions,
+                aht=request.aht,
+                asa=request.asa,
+                interval=int(request.interval_min),
+                shrinkage=request.shrinkage,
             )
             result = erlang.required_positions(
-                service_level=float(service_level),
-                max_occupancy=float(max_occupancy),
+                service_level=request.service_level,
+                max_occupancy=request.max_occupancy,
             )
 
             staffing_result = StaffingResult(
                 algorithm="erlang_c",
-                allocations={"period_0": [result["positions"]]},
-                metrics={
-                    "raw_positions": float(result["raw_positions"]),
-                    "positions": float(result["positions"]),
-                    "service_level": float(result["service_level"]),
-                    "occupancy": float(result["occupancy"]),
-                    "waiting_probability": float(result["waiting_probability"]),
-                },
+                raw_positions=int(result["raw_positions"]),
+                positions=int(result["positions"]),
+                service_level=float(result["service_level"]),
+                occupancy=float(result["occupancy"]),
+                waiting_probability=float(result["waiting_probability"]),
                 metadata={
                     "provider": "pyworkforce",
                     "pyworkforce_method": "ErlangC.required_positions",
@@ -195,13 +192,13 @@ class PyworkforceAdapter(BaseAdapter):
                         "max_occupancy": "proportion (0, 1]",
                     },
                     "inputs": {
-                        "transactions": float(transactions),
-                        "aht": float(aht),
-                        "asa": float(asa),
-                        "interval": int(interval),
-                        "service_level": float(service_level),
-                        "max_occupancy": float(max_occupancy),
-                        "shrinkage": float(shrinkage),
+                        "transactions": float(request.transactions),
+                        "aht": float(request.aht),
+                        "asa": float(request.asa),
+                        "interval_min": int(request.interval_min),
+                        "service_level": float(request.service_level),
+                        "max_occupancy": float(request.max_occupancy),
+                        "shrinkage": float(request.shrinkage),
                     },
                 },
             )
@@ -224,10 +221,10 @@ class PyworkforceAdapter(BaseAdapter):
                 operation="staff",
                 success=False,
                 data=None,
-                error_message=str(e),
+                error_message=f"staff() failed: {e}",
             )
 
-    def schedule(self, data: list[Any], **kwargs) -> AdapterResult:
+    def schedule(self, data: Any, **kwargs) -> AdapterResult:
         """
         Scheduling is not implemented. pyworkforce does provide rostering
         solvers (e.g. MinHoursRoster), but wiring one is out of scope for this
@@ -245,7 +242,7 @@ class PyworkforceAdapter(BaseAdapter):
             ),
         )
 
-    def optimize(self, data: list[Any], **kwargs) -> AdapterResult:
+    def optimize(self, data: Any, **kwargs) -> AdapterResult:
         """Not supported - optimization is not wired in this stage."""
         return AdapterResult(
             adapter_name=self.config.provider_name,
@@ -255,7 +252,7 @@ class PyworkforceAdapter(BaseAdapter):
             error_message="Optimization is not implemented in this stage.",
         )
 
-    def validate(self, data: list[Any], **kwargs) -> AdapterResult:
+    def validate(self, data: Any, **kwargs) -> AdapterResult:
         """Not supported here - data validation is delegated to the Pandera adapter."""
         return AdapterResult(
             adapter_name=self.config.provider_name,

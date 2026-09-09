@@ -70,3 +70,85 @@ class TestWFMCLI:
         assert parsed["metadata"]["command"] == "validate"
         # 'valid' reflects whether the dataset passed the Pandera schema.
         assert "valid" in parsed["data"]
+
+
+class TestCLICommands:
+    """Test the real Click CLI commands and their exit codes.
+
+    Uses pytest's CliRunner instead of the programmatic WFMCLI so the
+    installed console-script behavior is exercised.
+    """
+
+    def test_help_exits_zero(self):
+        from click.testing import CliRunner
+
+        from wfm_toolkit.cli import main
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["--help"])
+        assert result.exit_code == 0
+        assert "Workforce Management Toolkit CLI" in result.output
+
+    def test_doctor_exits_zero_and_lists_three(self):
+        from click.testing import CliRunner
+
+        from wfm_toolkit.cli import main
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["doctor"])
+        assert result.exit_code == 0
+        parsed = json.loads(result.output)
+        assert parsed["success"] is True
+        assert set(parsed["data"]["executable_capabilities"]) == {
+            "forecast.generate",
+            "staffing.erlang_c",
+            "validate.dataset",
+        }
+
+    def test_capabilities_exits_zero(self):
+        from click.testing import CliRunner
+
+        from wfm_toolkit.cli import main
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["capabilities"])
+        assert result.exit_code == 0
+        parsed = json.loads(result.output)
+        assert parsed["data"]["count"] >= 3
+
+    def test_validate_command_valid_csv(self, tmp_path):
+        from click.testing import CliRunner
+
+        from wfm_toolkit.cli import main
+
+        csv_file = tmp_path / "valid.csv"
+        csv_file.write_text(
+            "timestamp,value\n2024-01-01T08:00:00,120.0\n2024-01-01T09:00:00,150.0\n"
+        )
+        runner = CliRunner()
+        result = runner.invoke(main, ["validate", str(csv_file)])
+        assert result.exit_code == 0
+        parsed = json.loads(result.output)
+        assert parsed["data"]["valid"] is True
+
+    def test_validate_command_invalid_csv_exits_1(self, tmp_path):
+        from click.testing import CliRunner
+
+        from wfm_toolkit.cli import main
+
+        csv_file = tmp_path / "invalid.csv"
+        csv_file.write_text("timestamp,value\n2024-01-01T08:00:00,-5.0\n")
+        runner = CliRunner()
+        result = runner.invoke(main, ["validate", str(csv_file)])
+        assert result.exit_code == 1
+        parsed = json.loads(result.output)
+        assert parsed["data"]["valid"] is False
+
+    def test_validate_command_missing_file_exits_2(self, tmp_path):
+        from click.testing import CliRunner
+
+        from wfm_toolkit.cli import main
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["validate", str(tmp_path / "nope.csv")])
+        assert result.exit_code != 0

@@ -11,12 +11,22 @@ pretending to perform the named operation.
 
 from __future__ import annotations
 
+from typing import Any
+
 import pandas as pd
-from pandera import Check, Column, DataFrameSchema
 from pandera.errors import SchemaError
+from pandera.pandas import Check, Column, DataFrameSchema
 
 from ..domain import WFMData
 from .base import AdapterConfig, AdapterResult, BaseAdapter
+
+# A WFM timestamp at or after this UTC instant is considered plausible.
+# Use timezone-naive for compatibility with test data; pandas will treat
+# naive datetimes as UTC for comparison purposes.
+_MIN_TIMESTAMP = pd.Timestamp("2020-01-01")
+# A WFM value must be a positive finite number below this cap (units-agnostic
+# sanity bound; a single interval never legitimately exceeds 1M units).
+_MAX_VALUE = 1e6
 
 
 def _convert_to_dataframe(data: list[WFMData]) -> pd.DataFrame:
@@ -30,7 +40,11 @@ def _convert_to_dataframe(data: list[WFMData]) -> pd.DataFrame:
 
 
 def _convert_to_wfmdata(df: pd.DataFrame) -> list[WFMData]:
-    """Convert a validated DataFrame back to a list of WFMData."""
+    """Convert a validated DataFrame back to a list of WFMData.
+
+    Note: original per-point ``metadata`` is not preserved through Pandera
+    validation; the exported points carry empty metadata.
+    """
     return [
         WFMData(
             timestamp=row["timestamp"],
@@ -69,8 +83,10 @@ class PanderaAdapter(BaseAdapter):
 
             if not getattr(pandera, "__version__", None):
                 raise ImportError("Pandera version not detected")
-        except ImportError:
-            raise ImportError("Pandera is not installed. Install with: pip install pandera")
+        except ImportError as exc:
+            raise ImportError(
+                "Pandera is not installed. Install with: pip install pandera"
+            ) from exc
 
     def _initialize_validation(self):
         """Initialize the input/output Pandera schemas for WFMData validation."""
@@ -79,18 +95,24 @@ class PanderaAdapter(BaseAdapter):
                 "timestamp": Column(
                     dtype="datetime64[ns]",
                     nullable=False,
-                    checks=[Check(lambda x: all(x >= pd.Timestamp("2020-01-01")))],
+                    checks=[
+                        Check(lambda x: all(x >= _MIN_TIMESTAMP), name="timestamp_not_before_2020")
+                    ],
                 ),
                 "value": Column(
                     dtype="float64",
                     nullable=False,
-                    checks=[Check(lambda x: all(x > 0)), Check(lambda x: all(x < 1e6))],
+                    checks=[
+                        Check(lambda x: all(x > 0), name="value_positive"),
+                        Check(lambda x: all(x < _MAX_VALUE), name="value_below_1e6"),
+                    ],
                 ),
             },
             checks=[
                 Check(lambda df: len(df) > 0, name="non_empty"),
                 Check(
-                    lambda df: df["timestamp"].is_monotonic_increasing, name="timestamps_monotonic"
+                    lambda df: df["timestamp"].is_monotonic_increasing,
+                    name="timestamps_monotonic",
                 ),
             ],
         )
@@ -115,51 +137,67 @@ class PanderaAdapter(BaseAdapter):
         except Exception:
             return False
 
-    def forecast(self, data: list[WFMData], **kwargs) -> AdapterResult:
+    def forecast(self, data: Any, **kwargs) -> AdapterResult:
         """Unsupported - Pandera does not forecast."""
         return AdapterResult(
             adapter_name=self.config.provider_name,
             operation="forecast",
             success=False,
             data=None,
-            error_message="Pandera is a data validation provider; it does not forecast. Use the StatsForecast adapter.",
+            error_message=(
+                "Pandera is a data validation provider; it does not forecast. Use the StatsForecast adapter."
+            ),
         )
 
-    def staff(self, data: list[WFMData], **kwargs) -> AdapterResult:
+    def staff(self, data: Any, **kwargs) -> AdapterResult:
         """Unsupported - Pandera does not staff."""
         return AdapterResult(
             adapter_name=self.config.provider_name,
             operation="staff",
             success=False,
             data=None,
-            error_message="Pandera is a data validation provider; it does not staff. Use the pyworkforce adapter.",
+            error_message=(
+                "Pandera is a data validation provider; it does not staff. Use the pyworkforce adapter."
+            ),
         )
 
-    def schedule(self, data: list[WFMData], **kwargs) -> AdapterResult:
+    def schedule(self, data: Any, **kwargs) -> AdapterResult:
         """Unsupported - Pandera does not schedule."""
         return AdapterResult(
             adapter_name=self.config.provider_name,
             operation="schedule",
             success=False,
             data=None,
-            error_message="Pandera is a data validation provider; it does not schedule. Scheduling is deferred.",
+            error_message=(
+                "Pandera is a data validation provider; it does not schedule. Scheduling is deferred."
+            ),
         )
 
-    def optimize(self, data: list[WFMData], **kwargs) -> AdapterResult:
+    def optimize(self, data: Any, **kwargs) -> AdapterResult:
         """Unsupported - Pandera does not optimize."""
         return AdapterResult(
             adapter_name=self.config.provider_name,
             operation="optimize",
             success=False,
             data=None,
-            error_message="Pandera is a data validation provider; it does not optimize. Optimization is deferred.",
+            error_message=(
+                "Pandera is a data validation provider; it does not optimize. Optimization is deferred."
+            ),
         )
 
     def validate(self, data: list[WFMData], **kwargs) -> AdapterResult:
-        """Validate WFMData against the input/output schemas (the executable capability)."""
+        """Validate WFMData against the canonical schema (the executable capability).
+
+        Returns a structured failure with the Pandera ``SchemaError`` message on
+        invalid input; never a fake success. ``data`` may be a list of WFMData.
+        """
         try:
             input_df = _convert_to_dataframe(data)
             validated = self.input_schema.validate(input_df)
+
+            # The input schema already guarantees the validated frame conforms to
+            # the output shape; validate the round-tripped frame to be explicit
+            # about the output contract.
             output_df = _convert_to_dataframe(_convert_to_wfmdata(validated))
             self.output_schema.validate(output_df)
 
@@ -181,7 +219,7 @@ class PanderaAdapter(BaseAdapter):
                 operation="validate",
                 success=False,
                 data=None,
-                error_message=f"Schema validation failed: {str(e)}",
+                error_message=f"Schema validation failed: {e}",
             )
         except Exception as e:
             return AdapterResult(
@@ -189,5 +227,5 @@ class PanderaAdapter(BaseAdapter):
                 operation="validate",
                 success=False,
                 data=None,
-                error_message=f"Validation failed: {str(e)}",
+                error_message=f"Validation failed: {e}",
             )
