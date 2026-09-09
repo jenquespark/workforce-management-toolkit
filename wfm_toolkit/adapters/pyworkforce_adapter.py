@@ -119,10 +119,16 @@ class PyworkforceAdapter(BaseAdapter):
 
             if request is None:
                 # Build from explicit kwargs (all required).
+                # Accept both short names (aht, asa) and _min-suffixed names (aht_min, asa_min).
+                resolved = dict(kwargs)
+                if "aht_min" in resolved and "aht" not in resolved:
+                    resolved["aht"] = resolved.pop("aht_min")
+                if "asa_min" in resolved and "asa" not in resolved:
+                    resolved["asa"] = resolved.pop("asa_min")
                 missing = [
                     name
                     for name in ("transactions", "aht", "asa", "interval_min")
-                    if kwargs.get(name) is None
+                    if resolved.get(name) is None
                 ]
                 if missing:
                     return AdapterResult(
@@ -137,24 +143,24 @@ class PyworkforceAdapter(BaseAdapter):
                         ),
                     )
                 request = StaffingRequest(
-                    transactions=float(kwargs["transactions"]),
-                    aht=float(kwargs["aht"]),
-                    asa=float(kwargs["asa"]),
-                    interval_min=int(kwargs["interval_min"]),
+                    transactions=float(resolved["transactions"]),
+                    aht=float(resolved["aht"]),
+                    asa=float(resolved["asa"]),
+                    interval_min=int(resolved["interval_min"]),
                     service_level=float(
-                        kwargs.get(
+                        resolved.get(
                             "service_level",
                             self.config.configuration_options.get("service_level", 0.80),
                         )
                     ),
                     max_occupancy=float(
-                        kwargs.get(
+                        resolved.get(
                             "max_occupancy",
                             self.config.configuration_options.get("max_occupancy", 0.85),
                         )
                     ),
                     shrinkage=float(
-                        kwargs.get(
+                        resolved.get(
                             "shrinkage", self.config.configuration_options.get("shrinkage", 0.0)
                         )
                     ),
