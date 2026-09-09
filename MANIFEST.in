@@ -1,0 +1,6 @@
+include README.md
+include LICENSE
+include THIRD_PARTY.md
+include CHANGELOG.md
+include CONTRIBUTING.md
+recursive-include docs *.md
