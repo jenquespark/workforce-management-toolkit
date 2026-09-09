@@ -1,0 +1,85 @@
+name: Release to PyPI
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_ref:
+        description: 'Release tag to publish (must be v0.1.0)'
+        required: true
+        default: 'v0.1.0'
+      expected_sha:
+        description: 'Expected commit SHA for the release tag'
+        required: true
+        default: 'e4b031eb3c8e75f8730c2ed0b4b068ab003f2eeb'
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  publish:
+    name: Publish to PyPI
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/workforce-management-toolkit
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.release_ref }}
+          fetch-depth: 0
+
+      - name: Verify commit SHA matches expected
+        run: |
+          ACTUAL_SHA=$(git rev-parse HEAD)
+          EXPECTED_SHA="${{ github.event.inputs.expected_sha }}"
+          echo "Actual:   $ACTUAL_SHA"
+          echo "Expected: $EXPECTED_SHA"
+          if [ "$ACTUAL_SHA" != "$EXPECTED_SHA" ]; then
+            echo "::error::Commit SHA mismatch! Tag points to $ACTUAL_SHA but expected $EXPECTED_SHA"
+            exit 1
+          fi
+          echo "SHA verified."
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tooling
+        run: |
+          pip install --upgrade pip build twine
+
+      - name: Build distributions
+        run: python -m build
+
+      - name: Verify distributions
+        run: |
+          echo "=== Built artifacts ==="
+          ls -la dist/
+          echo ""
+          echo "=== twine check ==="
+          twine check dist/*
+
+      - name: Verify wheel metadata
+        run: |
+          WHL=$(ls dist/*.whl)
+          python -c "
+import zipfile
+z = zipfile.ZipFile(WHL)
+meta_name = [n for n in z.namelist() if n.endswith('METADATA')][0]
+meta = z.read(meta_name).decode()
+for line in meta.splitlines():
+    if any(k in line for k in ['Name:', 'Version:', 'Requires-Python:', 'License-Expression:', 'License-File:', 'Provides-Extra:', 'Entry-points:', 'Project-URL:']):
+        print(line)
+"
+
+      - name: Publish to PyPI via Trusted Publishing
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          print-hash: true
+          attestations: true
