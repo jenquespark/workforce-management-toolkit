@@ -151,4 +151,20 @@ class TestCLICommands:
 
         runner = CliRunner()
         result = runner.invoke(main, ["validate", str(tmp_path / "nope.csv")])
-        assert result.exit_code != 0
+        assert result.exit_code == 2
+
+    def test_validate_command_timezone_aware_csv_exits_0(self, tmp_path):
+        """ISO-8601 'Z' timestamps are valid input and must exit 0."""
+        from click.testing import CliRunner
+
+        from wfm_toolkit.cli import main
+
+        csv_file = tmp_path / "tz.csv"
+        csv_file.write_text(
+            "timestamp,value\n2026-09-01T08:00:00Z,120.0\n2026-09-01T09:00:00Z,150.0\n"
+        )
+        runner = CliRunner()
+        result = runner.invoke(main, ["validate", str(csv_file)])
+        assert result.exit_code == 0
+        parsed = json.loads(result.output)
+        assert parsed["data"]["valid"] is True

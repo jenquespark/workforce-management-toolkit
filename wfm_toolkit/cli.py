@@ -162,7 +162,13 @@ def _load_dataset(path: str) -> list[WFMData]:
 @main.command()
 @click.argument("path", type=click.Path(exists=True, dir_okay=False))
 def validate(path: str) -> None:
-    """Validate a WFM dataset file (CSV or JSON) against the canonical schema."""
+    """Validate a WFM dataset file (CSV or JSON) against the canonical schema.
+
+    Exit codes:
+        0  — dataset is valid (JSON output shows "success": true)
+        1  — schema validation failed (data has errors)
+        2  — could not load the dataset (bad file, bad format, bad values)
+    """
     try:
         data = _load_dataset(path)
     except Exception as e:
