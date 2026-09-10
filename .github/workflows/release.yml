@@ -51,8 +51,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install build tooling
-        run: |
-          pip install --upgrade pip build twine
+        run: pip install --upgrade pip build twine
 
       - name: Build distributions
         run: python -m build
@@ -68,15 +67,17 @@ jobs:
       - name: Verify wheel metadata
         run: |
           WHL=$(ls dist/*.whl)
-          python -c "
-import zipfile
-z = zipfile.ZipFile(WHL)
-meta_name = [n for n in z.namelist() if n.endswith('METADATA')][0]
-meta = z.read(meta_name).decode()
-for line in meta.splitlines():
-    if any(k in line for k in ['Name:', 'Version:', 'Requires-Python:', 'License-Expression:', 'License-File:', 'Provides-Extra:', 'Entry-points:', 'Project-URL:']):
-        print(line)
-"
+          python3 -c "
+          import zipfile, sys
+          z = zipfile.ZipFile(sys.argv[1])
+          meta_name = [n for n in z.namelist() if n.endswith('METADATA')][0]
+          meta = z.read(meta_name).decode()
+          keys = ['Name:', 'Version:', 'Requires-Python:', 'License-Expression:',
+                  'License-File:', 'Provides-Extra:', 'Entry-points:', 'Project-URL:']
+          for line in meta.splitlines():
+              if any(k in line for k in keys):
+                  print(line)
+          " "$WHL"
 
       - name: Publish to PyPI via Trusted Publishing
         uses: pypa/gh-action-pypi-publish@release/v1
